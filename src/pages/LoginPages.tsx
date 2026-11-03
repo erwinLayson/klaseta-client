@@ -7,32 +7,72 @@ import {
     Platform,
     ScrollView,
 } from "react-native";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { loginPagesStyle } from "../styles/index";
-import { Button, InputGroup } from "../components/index";
+import { Button, InputGroup, DialogMessage } from "../components/index";
 import { RootParamList } from "../types/RootParamList";
 import { UserCredentialProp } from "../types/users";
 import { handleLogin } from "../services/pages/LoginPages";
+import type { DialogType } from "../components/ui/DialogMessage";
 
 export function LoginPages() {
     const navigation = useNavigation<NativeStackNavigationProp<RootParamList>>();
+    const [isLoading, setIsLoading] = useState(false);
     const [userCredential, setUserCredential] = useState<UserCredentialProp>({
         username: "",
         password: ""
+    });
+
+    const loggedInUsernameRef = useRef("");
+
+    const [dialog, setDialog] = useState({
+        visible: false,
+        type: "success" as DialogType,
+        title: "",
+        message: "",
     });
 
     const setCredential = (name: keyof UserCredentialProp, value: string) => {
         setUserCredential((prev) => ({
             ...prev,
             [name]: value
-        }))
-    }
+        }));
+    };
 
-    const onLogin = () => {
-        handleLogin(userCredential)
-    }
+    const showDialog = (type: DialogType, title: string, message: string) => {
+        setDialog({ visible: true, type, title, message });
+    };
+
+    const onCloseDialog = () => {
+        setDialog((prev) => ({ ...prev, visible: false }));
+
+        if (dialog.type === "success" && loggedInUsernameRef.current) {
+            navigation.reset({
+                index: 0,
+                routes: [{ name: "dashboard", params: { username: loggedInUsernameRef.current } }],
+            });
+        }
+    };
+
+    const onLogin = async () => {
+        if (isLoading) return;
+        setIsLoading(true);
+
+        try {
+            const result = await handleLogin(userCredential);
+
+            if (result.success && result.username) {
+                loggedInUsernameRef.current = result.username;
+                showDialog("success", "Welcome back!", result.message);
+            } else {
+                showDialog("error", "Login Failed", result.message);
+            }
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     return (
         <View style={loginPagesStyle.container}>
@@ -74,7 +114,10 @@ export function LoginPages() {
                             secureText={true}
                         />
 
-                        <Button label="Login" onPress={onLogin} />
+                        <Button
+                            label={isLoading ? "Signing in..." : "Login"}
+                            onPress={onLogin}
+                        />
 
                         <View style={loginPagesStyle.Footer}>
                             <Text style={loginPagesStyle.FooterText}>{"Don't have an account?"}</Text>
@@ -85,6 +128,14 @@ export function LoginPages() {
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
+
+            <DialogMessage
+                visible={dialog.visible}
+                type={dialog.type}
+                title={dialog.title}
+                message={dialog.message}
+                onClose={onCloseDialog}
+            />
         </View>
-    )
+    );
 }

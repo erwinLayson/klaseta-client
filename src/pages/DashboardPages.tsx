@@ -1,11 +1,12 @@
 import { View, Text, ScrollView, Pressable } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useRoute } from "@react-navigation/native";
+import type { RouteProp } from "@react-navigation/native";
 import { dashboardPagesStyle } from "../styles/index";
 import { RootParamList } from "../types/RootParamList";
 
 export function DashboardPages() {
-    const navigation = useNavigation<NativeStackNavigationProp<RootParamList>>();
+    const route = useRoute<RouteProp<RootParamList, "dashboard">>();
+    const { username } = route.params;
 
     return (
         <View style={dashboardPagesStyle.container}>
@@ -17,7 +18,7 @@ export function DashboardPages() {
                 showsVerticalScrollIndicator={false}
             >
                 <View style={dashboardPagesStyle.header}>
-                    <Text style={dashboardPagesStyle.greeting}>Welcome back 👋</Text>
+                    <Text style={dashboardPagesStyle.greeting}>Welcome back, {username} 👋</Text>
                     <Text style={dashboardPagesStyle.subtitle}>Here's your overview</Text>
                 </View>
 
@@ -67,4 +68,3 @@ export function DashboardPages() {
         </View>
     );
 }
-
