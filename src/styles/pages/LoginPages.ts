@@ -1,0 +1,90 @@
+import { StyleSheet } from "react-native";
+
+export const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: "#F4F6FB",
+    },
+    backgroundAccent: {
+        position: "absolute",
+        top: -90,
+        right: -70,
+        width: 240,
+        height: 240,
+        borderRadius: 120,
+        backgroundColor: "#E0E7FF",
+        opacity: 0.9,
+    },
+    backgroundAccentBottom: {
+        position: "absolute",
+        bottom: -120,
+        left: -80,
+        width: 260,
+        height: 260,
+        borderRadius: 130,
+        backgroundColor: "#DBEAFE",
+        opacity: 0.7,
+    },
+    KeyboardAvoidingView: {
+        flex: 1,
+    },
+    ScrollView: {
+        flexGrow: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        paddingHorizontal: 24,
+        paddingVertical: 36,
+    },
+    LoginContainer: {
+        width: "100%",
+        maxWidth: 420,
+        alignItems: "stretch",
+        backgroundColor: "#FFFFFF",
+        borderRadius: 28,
+        paddingHorizontal: 24,
+        paddingVertical: 32,
+        shadowColor: "#0F172A",
+        shadowOffset: { width: 0, height: 18 },
+        shadowOpacity: 0.08,
+        shadowRadius: 30,
+        elevation: 6,
+    },
+    Header: {
+        alignItems: "center",
+        marginBottom: 28,
+    },
+    LogoImage: {
+        width: 150,
+        height: 150,
+        marginBottom: 8,
+    },
+    Title: {
+        fontSize: 26,
+        fontWeight: "700",
+        color: "#0F172A",
+        marginBottom: 8,
+        letterSpacing: -0.4,
+    },
+    Subtitle: {
+        fontSize: 15,
+        lineHeight: 22,
+        color: "#64748B",
+        textAlign: "center",
+    },
+    Footer: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        marginTop: 24,
+    },
+    FooterText: {
+        fontSize: 14,
+        color: "#64748B",
+    },
+    FooterLink: {
+        fontSize: 14,
+        fontWeight: "700",
+        color: "#4F46E5",
+    },
+});
