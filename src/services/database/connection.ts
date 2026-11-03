@@ -1,18 +1,21 @@
 import * as SQLITE from "expo-sqlite";
+import { runMigrations } from "./migrationRunner";
 
-const db = SQLITE.openDatabaseAsync("klaseta.db");
+const DATABASE_NAME = "klaseta.db";
 
-const initilizeDatabase = async () => {
-    try {
-       (await db).execAsync(`
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL,
-                email TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL
-            );
-        `)
-    }catch(err) {
-        throw err;
+let databasePromise: Promise<SQLITE.SQLiteDatabase> | null = null;
+
+export function getDatabase() {
+    if (!databasePromise) {
+        databasePromise = SQLITE.openDatabaseAsync(DATABASE_NAME);
     }
+
+    return databasePromise;
+}
+
+export async function initializeDatabase() {
+    const db = await getDatabase();
+    await runMigrations(db);
+
+    return db;
 }
