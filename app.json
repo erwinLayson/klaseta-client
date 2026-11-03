@@ -1,10 +1,11 @@
 {
   "expo": {
-    "name": "client",
+    "name": "klaseta",
     "slug": "client",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "icon": "./assets/app_logo.png",
     "ios": {
       "supportsTablet": true
     },
@@ -22,6 +23,15 @@
       "eas": {
         "projectId": "0def87d0-9454-4c8f-9cbc-ccc5b0fb4b0d"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "enabled": true,
+      "url": "https://u.expo.dev/0def87d0-9454-4c8f-9cbc-ccc5b0fb4b0d",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
     }
   }
 }
