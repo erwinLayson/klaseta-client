@@ -1,19 +1,41 @@
 import { StyleSheet, Text, View, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 
 export type NavTab = "dashboard" | "attendance" | "gradebook" | "settings";
 
 interface NavItemConfig {
     key: NavTab;
     label: string;
-    icon: string;
+    activeIcon: keyof typeof Ionicons.glyphMap;
+    inactiveIcon: keyof typeof Ionicons.glyphMap;
 }
 
 const NAV_ITEMS: NavItemConfig[] = [
-    { key: "dashboard", label: "Dashboard", icon: "📊" },
-    { key: "attendance", label: "Attendance", icon: "📋" },
-    { key: "gradebook", label: "Gradebook", icon: "📖" },
-    { key: "settings", label: "Settings", icon: "⚙️" },
+    {
+        key: "dashboard",
+        label: "Dashboard",
+        activeIcon: "grid",
+        inactiveIcon: "grid-outline",
+    },
+    {
+        key: "attendance",
+        label: "Attendance",
+        activeIcon: "clipboard",
+        inactiveIcon: "clipboard-outline",
+    },
+    {
+        key: "gradebook",
+        label: "Gradebook",
+        activeIcon: "book",
+        inactiveIcon: "book-outline",
+    },
+    {
+        key: "settings",
+        label: "Settings",
+        activeIcon: "settings",
+        inactiveIcon: "settings-outline",
+    },
 ];
 
 interface BottomNavBarProps {
@@ -29,6 +51,8 @@ export function BottomNavBar({ activeTab, onTabPress }: BottomNavBarProps) {
             <View style={styles.container}>
                 {NAV_ITEMS.map((item) => {
                     const isActive = activeTab === item.key;
+                    const iconName = isActive ? item.activeIcon : item.inactiveIcon;
+                    const iconColor = isActive ? "#4F46E5" : "#64748B";
 
                     return (
                         <Pressable
@@ -40,7 +64,7 @@ export function BottomNavBar({ activeTab, onTabPress }: BottomNavBarProps) {
                             ]}
                         >
                             <View style={[styles.iconContainer, isActive && styles.iconContainerActive]}>
-                                <Text style={styles.icon}>{item.icon}</Text>
+                                <Ionicons name={iconName} size={20} color={iconColor} />
                             </View>
                             <Text
                                 style={[
@@ -98,9 +122,6 @@ const styles = StyleSheet.create({
     iconContainerActive: {
         backgroundColor: "#EEF2FF",
     },
-    icon: {
-        fontSize: 18,
-    },
     label: {
         fontSize: 11,
         letterSpacing: 0.1,
@@ -114,4 +135,3 @@ const styles = StyleSheet.create({
         color: "#64748B",
     },
 });
-

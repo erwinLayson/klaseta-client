@@ -1,4 +1,5 @@
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 export type DialogType = "success" | "error";
 
@@ -23,7 +24,11 @@ export function DialogMessage({ visible, type, title, message, onClose }: Dialog
             <View style={styles.overlay}>
                 <View style={styles.container}>
                     <View style={[styles.iconCircle, isSuccess ? styles.iconSuccess : styles.iconError]}>
-                        <Text style={styles.iconText}>{isSuccess ? "✓" : "✕"}</Text>
+                        <Ionicons
+                            name={isSuccess ? "checkmark" : "close"}
+                            size={28}
+                            color={isSuccess ? "#16A34A" : "#DC2626"}
+                        />
                     </View>
 
                     <Text style={styles.title}>{title}</Text>
@@ -81,11 +86,6 @@ const styles = StyleSheet.create({
     iconError: {
         backgroundColor: "#FEE2E2",
     },
-    iconText: {
-        fontSize: 26,
-        fontWeight: "700",
-        color: "#0F172A",
-    },
     title: {
         fontSize: 20,
         fontWeight: "700",
@@ -125,4 +125,3 @@ const styles = StyleSheet.create({
         letterSpacing: 0.3,
     },
 });
-

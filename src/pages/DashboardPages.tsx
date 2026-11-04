@@ -2,6 +2,7 @@ import { useState } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
 import { dashboardPagesStyle } from "../styles/index";
 import { RootParamList } from "../types/RootParamList";
 import { BottomNavBar, type NavTab } from "../components/index";
@@ -27,8 +28,8 @@ export function DashboardPages() {
                 {activeTab === "dashboard" && (
                     <>
                         <View style={dashboardPagesStyle.header}>
-                            <Text style={dashboardPagesStyle.greeting}>Welcome back, {username} 👋</Text>
-                            <Text style={dashboardPagesStyle.subtitle}>Here's your overview</Text>
+                            <Text style={dashboardPagesStyle.greeting}>Welcome back, {username}</Text>
+                            <Text style={dashboardPagesStyle.subtitle}>Here&apos;s your overview</Text>
                         </View>
 
                         <View style={dashboardPagesStyle.statsRow}>
@@ -49,6 +50,12 @@ export function DashboardPages() {
                         <View style={dashboardPagesStyle.section}>
                             <Text style={dashboardPagesStyle.sectionTitle}>Recent Activity</Text>
                             <View style={dashboardPagesStyle.emptyCard}>
+                                <Ionicons
+                                    name="time-outline"
+                                    size={36}
+                                    color="#94A3B8"
+                                    style={dashboardPagesStyle.emptyIcon}
+                                />
                                 <Text style={dashboardPagesStyle.emptyText}>No recent activity yet</Text>
                                 <Text style={dashboardPagesStyle.emptySubtext}>
                                     Start a course to see your progress here
@@ -63,21 +70,36 @@ export function DashboardPages() {
                                     style={dashboardPagesStyle.actionButton}
                                     onPress={() => setActiveTab("gradebook")}
                                 >
-                                    <Text style={dashboardPagesStyle.actionIcon}>📚</Text>
+                                    <Ionicons
+                                        name="book-outline"
+                                        size={26}
+                                        color="#4F46E5"
+                                        style={dashboardPagesStyle.actionIcon}
+                                    />
                                     <Text style={dashboardPagesStyle.actionLabel}>Gradebook</Text>
                                 </Pressable>
                                 <Pressable
                                     style={dashboardPagesStyle.actionButton}
                                     onPress={() => setActiveTab("attendance")}
                                 >
-                                    <Text style={dashboardPagesStyle.actionIcon}>📋</Text>
+                                    <Ionicons
+                                        name="clipboard-outline"
+                                        size={26}
+                                        color="#4F46E5"
+                                        style={dashboardPagesStyle.actionIcon}
+                                    />
                                     <Text style={dashboardPagesStyle.actionLabel}>Attendance</Text>
                                 </Pressable>
                                 <Pressable
                                     style={dashboardPagesStyle.actionButton}
                                     onPress={() => setActiveTab("settings")}
                                 >
-                                    <Text style={dashboardPagesStyle.actionIcon}>⚙️</Text>
+                                    <Ionicons
+                                        name="settings-outline"
+                                        size={26}
+                                        color="#4F46E5"
+                                        style={dashboardPagesStyle.actionIcon}
+                                    />
                                     <Text style={dashboardPagesStyle.actionLabel}>Settings</Text>
                                 </Pressable>
                             </View>
@@ -88,10 +110,19 @@ export function DashboardPages() {
                 {activeTab === "attendance" && (
                     <View style={dashboardPagesStyle.section}>
                         <View style={dashboardPagesStyle.header}>
-                            <Text style={dashboardPagesStyle.greeting}>Attendance 📋</Text>
+                            <View style={dashboardPagesStyle.headerTitleRow}>
+                                <Ionicons name="clipboard-outline" size={26} color="#4F46E5" />
+                                <Text style={dashboardPagesStyle.greeting}>Attendance</Text>
+                            </View>
                             <Text style={dashboardPagesStyle.subtitle}>Track student attendance records</Text>
                         </View>
                         <View style={dashboardPagesStyle.emptyCard}>
+                            <Ionicons
+                                name="calendar-outline"
+                                size={40}
+                                color="#94A3B8"
+                                style={dashboardPagesStyle.emptyIcon}
+                            />
                             <Text style={dashboardPagesStyle.emptyText}>No attendance records</Text>
                             <Text style={dashboardPagesStyle.emptySubtext}>
                                 Attendance logs will appear here once classes begin.
@@ -103,10 +134,19 @@ export function DashboardPages() {
                 {activeTab === "gradebook" && (
                     <View style={dashboardPagesStyle.section}>
                         <View style={dashboardPagesStyle.header}>
-                            <Text style={dashboardPagesStyle.greeting}>Gradebook 📖</Text>
+                            <View style={dashboardPagesStyle.headerTitleRow}>
+                                <Ionicons name="book-outline" size={26} color="#4F46E5" />
+                                <Text style={dashboardPagesStyle.greeting}>Gradebook</Text>
+                            </View>
                             <Text style={dashboardPagesStyle.subtitle}>Manage student grades and assessments</Text>
                         </View>
                         <View style={dashboardPagesStyle.emptyCard}>
+                            <Ionicons
+                                name="school-outline"
+                                size={40}
+                                color="#94A3B8"
+                                style={dashboardPagesStyle.emptyIcon}
+                            />
                             <Text style={dashboardPagesStyle.emptyText}>No grades recorded</Text>
                             <Text style={dashboardPagesStyle.emptySubtext}>
                                 Grade entries and grading criteria will appear here.
@@ -118,10 +158,19 @@ export function DashboardPages() {
                 {activeTab === "settings" && (
                     <View style={dashboardPagesStyle.section}>
                         <View style={dashboardPagesStyle.header}>
-                            <Text style={dashboardPagesStyle.greeting}>Settings ⚙️</Text>
+                            <View style={dashboardPagesStyle.headerTitleRow}>
+                                <Ionicons name="settings-outline" size={26} color="#4F46E5" />
+                                <Text style={dashboardPagesStyle.greeting}>Settings</Text>
+                            </View>
                             <Text style={dashboardPagesStyle.subtitle}>Account and application preferences</Text>
                         </View>
                         <View style={dashboardPagesStyle.emptyCard}>
+                            <Ionicons
+                                name="person-circle-outline"
+                                size={44}
+                                color="#94A3B8"
+                                style={dashboardPagesStyle.emptyIcon}
+                            />
                             <Text style={dashboardPagesStyle.emptyText}>User Preferences</Text>
                             <Text style={dashboardPagesStyle.emptySubtext}>
                                 Signed in as {username}. Configuration options will appear here.

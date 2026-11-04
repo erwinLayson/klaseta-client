@@ -14,7 +14,7 @@
       "package": "com.erwin.klaseta"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/app_logo.png"
     },
     "plugins": [
       "expo-sqlite"

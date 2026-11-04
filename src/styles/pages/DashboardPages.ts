@@ -33,6 +33,11 @@ export const styles = StyleSheet.create({
     header: {
         marginBottom: 24,
     },
+    headerTitleRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+    },
     greeting: {
         fontSize: 28,
         fontWeight: "700",
@@ -95,6 +100,9 @@ export const styles = StyleSheet.create({
         shadowRadius: 14,
         elevation: 3,
     },
+    emptyIcon: {
+        marginBottom: 12,
+    },
     emptyText: {
         fontSize: 15,
         fontWeight: "600",
@@ -124,7 +132,6 @@ export const styles = StyleSheet.create({
         elevation: 3,
     },
     actionIcon: {
-        fontSize: 28,
         marginBottom: 8,
     },
     actionLabel: {
@@ -134,4 +141,3 @@ export const styles = StyleSheet.create({
         textAlign: "center",
     },
 });
-
