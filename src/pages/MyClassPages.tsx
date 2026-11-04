@@ -8,15 +8,22 @@ import {
     TextInput,
     KeyboardAvoidingView,
     Platform,
+    ActivityIndicator,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import * as DocumentPicker from "expo-document-picker";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { myClassPagesStyle } from "../styles/index";
 import { RootParamList } from "../types/RootParamList";
 import type { Student, AddStudentInput } from "../types/student";
-import { addStudent, getStudentsByTeacher } from "../services/pages/MyClassPages";
+import {
+    addStudent,
+    addStudentsBulk,
+    parseXlsxFile,
+    getStudentsByTeacher,
+} from "../services/pages/MyClassPages";
 import {
     BottomNavBar,
     Button,
@@ -47,15 +54,25 @@ export function MyClassPages() {
     const [searchQuery, setSearchQuery] = useState("");
     const [sortAsc, setSortAsc] = useState<boolean | null>(null);
 
+    // Single student modal state
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-
     const [form, setForm] = useState<AddStudentInput>({
         firstname: "",
         middlename: "",
         lastname: "",
         suffix: "None",
     });
+
+    // Bulk upload state
+    const [isBulkLoading, setIsBulkLoading] = useState(false);
+    const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+    const [bulkPreview, setBulkPreview] = useState<{
+        fileName: string;
+        students: AddStudentInput[];
+        skippedCount: number;
+        totalRows: number;
+    } | null>(null);
 
     const [dialog, setDialog] = useState({
         visible: false,
@@ -138,7 +155,99 @@ export function MyClassPages() {
         }
     };
 
-    const formatStudentName = useCallback((student: Student) => {
+    // Bulk XLSX File Picker
+    const handlePickXlsx = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: [
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "application/vnd.ms-excel",
+                    "text/csv",
+                    "*/*",
+                ],
+                copyToCacheDirectory: true,
+            });
+
+            if (result.canceled || !result.assets || result.assets.length === 0) {
+                return;
+            }
+
+            const asset = result.assets[0];
+            const fileName = asset.name || "students.xlsx";
+            const lowerName = fileName.toLowerCase();
+
+            if (
+                !lowerName.endsWith(".xlsx") &&
+                !lowerName.endsWith(".xls") &&
+                !lowerName.endsWith(".csv")
+            ) {
+                setDialog({
+                    visible: true,
+                    type: "error",
+                    title: "Invalid File Type",
+                    message: "Please choose an Excel spreadsheet (.xlsx, .xls) or CSV file.",
+                });
+                return;
+            }
+
+            setIsBulkLoading(true);
+
+            const parsed = await parseXlsxFile(asset.uri);
+
+            if (parsed.students.length === 0) {
+                setDialog({
+                    visible: true,
+                    type: "error",
+                    title: "No Valid Records",
+                    message:
+                        "No student records with first and last names were found in this file. Please ensure your column headers include First Name and Last Name.",
+                });
+                return;
+            }
+
+            setBulkPreview({
+                fileName,
+                students: parsed.students,
+                skippedCount: parsed.skippedCount,
+                totalRows: parsed.totalRows,
+            });
+            setIsBulkModalOpen(true);
+        } catch (error) {
+            console.error("Error picking document:", error);
+            setDialog({
+                visible: true,
+                type: "error",
+                title: "File Read Error",
+                message: "Could not read the spreadsheet. Please check the file format and try again.",
+            });
+        } finally {
+            setIsBulkLoading(false);
+        }
+    };
+
+    const handleConfirmBulkImport = async () => {
+        if (!bulkPreview || isBulkLoading) return;
+
+        setIsBulkLoading(true);
+        try {
+            const result = await addStudentsBulk(username, bulkPreview.students);
+
+            setIsBulkModalOpen(false);
+            setBulkPreview(null);
+            await loadStudents();
+
+            setDialog({
+                visible: true,
+                type: result.success ? "success" : "error",
+                title: result.success ? "Bulk Import Completed" : "Import Error",
+                message: result.message,
+            });
+        } finally {
+            setIsBulkLoading(false);
+        }
+    };
+
+    const formatStudentName = useCallback((student: { firstname: string; middlename?: string | null; lastname: string; suffix?: string | null }) => {
         const parts = [student.firstname];
         if (student.middlename) parts.push(student.middlename);
         parts.push(student.lastname);
@@ -190,16 +299,36 @@ export function MyClassPages() {
                             <Text style={myClassPagesStyle.greeting}>My Class</Text>
                         </View>
 
-                        <Pressable
-                            onPress={handleOpenModal}
-                            style={({ pressed }) => [
-                                myClassPagesStyle.addButton,
-                                pressed && myClassPagesStyle.addButtonPressed,
-                            ]}
-                        >
-                            <Ionicons name="person-add-outline" size={16} color="#FFFFFF" />
-                            <Text style={myClassPagesStyle.addButtonText}>Add Student</Text>
-                        </Pressable>
+                        <View style={myClassPagesStyle.headerActions}>
+                            <Pressable
+                                onPress={handlePickXlsx}
+                                disabled={isBulkLoading}
+                                style={({ pressed }) => [
+                                    myClassPagesStyle.bulkButton,
+                                    pressed && myClassPagesStyle.bulkButtonPressed,
+                                ]}
+                            >
+                                {isBulkLoading ? (
+                                    <ActivityIndicator size="small" color="#4F46E5" />
+                                ) : (
+                                    <Ionicons name="cloud-upload-outline" size={16} color="#4F46E5" />
+                                )}
+                                <Text style={myClassPagesStyle.bulkButtonText}>
+                                    {isBulkLoading ? "Reading..." : "Bulk Upload"}
+                                </Text>
+                            </Pressable>
+
+                            <Pressable
+                                onPress={handleOpenModal}
+                                style={({ pressed }) => [
+                                    myClassPagesStyle.addButton,
+                                    pressed && myClassPagesStyle.addButtonPressed,
+                                ]}
+                            >
+                                <Ionicons name="person-add-outline" size={16} color="#FFFFFF" />
+                                <Text style={myClassPagesStyle.addButtonText}>Add Student</Text>
+                            </Pressable>
+                        </View>
                     </View>
                     <Text style={myClassPagesStyle.subtitle}>
                         Manage enrolled students in your class
@@ -261,18 +390,31 @@ export function MyClassPages() {
                             />
                             <Text style={myClassPagesStyle.emptyText}>No students added yet</Text>
                             <Text style={myClassPagesStyle.emptySubtext}>
-                                Tap &quot;Add Student&quot; to begin building your class roster.
+                                Tap &quot;Add Student&quot; or &quot;Bulk Upload&quot; to import your class roster from an Excel file.
                             </Text>
-                            <Pressable
-                                onPress={handleOpenModal}
-                                style={({ pressed }) => [
-                                    myClassPagesStyle.addButton,
-                                    pressed && myClassPagesStyle.addButtonPressed,
-                                ]}
-                            >
-                                <Ionicons name="add" size={18} color="#FFFFFF" />
-                                <Text style={myClassPagesStyle.addButtonText}>Add First Student</Text>
-                            </Pressable>
+                            <View style={myClassPagesStyle.emptyActionsRow}>
+                                <Pressable
+                                    onPress={handleOpenModal}
+                                    style={({ pressed }) => [
+                                        myClassPagesStyle.addButton,
+                                        pressed && myClassPagesStyle.addButtonPressed,
+                                    ]}
+                                >
+                                    <Ionicons name="add" size={18} color="#FFFFFF" />
+                                    <Text style={myClassPagesStyle.addButtonText}>Add Student</Text>
+                                </Pressable>
+
+                                <Pressable
+                                    onPress={handlePickXlsx}
+                                    style={({ pressed }) => [
+                                        myClassPagesStyle.bulkButton,
+                                        pressed && myClassPagesStyle.bulkButtonPressed,
+                                    ]}
+                                >
+                                    <Ionicons name="cloud-upload-outline" size={16} color="#4F46E5" />
+                                    <Text style={myClassPagesStyle.bulkButtonText}>Bulk Upload</Text>
+                                </Pressable>
+                            </View>
                         </View>
                     ) : (
                         <View style={myClassPagesStyle.tableCard}>
@@ -401,7 +543,7 @@ export function MyClassPages() {
                 </View>
             </ScrollView>
 
-            {/* Add Student Modal */}
+            {/* Single Student Add Modal */}
             <Modal
                 visible={isModalOpen}
                 transparent
@@ -467,6 +609,76 @@ export function MyClassPages() {
                         </ScrollView>
                     </View>
                 </KeyboardAvoidingView>
+            </Modal>
+
+            {/* Bulk Upload Preview Modal */}
+            <Modal
+                visible={isBulkModalOpen}
+                transparent
+                animationType="fade"
+                onRequestClose={() => {
+                    if (!isBulkLoading) setIsBulkModalOpen(false);
+                }}
+            >
+                <View style={myClassPagesStyle.modalOverlay}>
+                    <View style={myClassPagesStyle.modalContent}>
+                        <View style={myClassPagesStyle.modalHeader}>
+                            <Text style={myClassPagesStyle.modalTitle}>Bulk Import Preview</Text>
+                            <Pressable
+                                onPress={() => !isBulkLoading && setIsBulkModalOpen(false)}
+                                hitSlop={8}
+                            >
+                                <Ionicons name="close" size={22} color="#64748B" />
+                            </Pressable>
+                        </View>
+
+                        {bulkPreview && (
+                            <ScrollView showsVerticalScrollIndicator={false}>
+                                <View style={myClassPagesStyle.previewCard}>
+                                    <Text style={myClassPagesStyle.previewFileName}>
+                                        📄 {bulkPreview.fileName}
+                                    </Text>
+                                    <Text style={myClassPagesStyle.previewStats}>
+                                        ✓ {bulkPreview.students.length} student records found
+                                    </Text>
+                                    {bulkPreview.skippedCount > 0 && (
+                                        <Text style={myClassPagesStyle.previewSkipped}>
+                                            ⚠ {bulkPreview.skippedCount} rows skipped (missing first/last name)
+                                        </Text>
+                                    )}
+
+                                    <Text style={myClassPagesStyle.previewListTitle}>
+                                        Sample Preview (first {Math.min(5, bulkPreview.students.length)}):
+                                    </Text>
+                                    {bulkPreview.students.slice(0, 5).map((item, idx) => (
+                                        <View key={idx} style={myClassPagesStyle.previewItem}>
+                                            <Ionicons name="checkmark" size={14} color="#16A34A" />
+                                            <Text style={myClassPagesStyle.previewItemText}>
+                                                {formatStudentName(item)}
+                                            </Text>
+                                        </View>
+                                    ))}
+                                </View>
+
+                                <Button
+                                    label={
+                                        isBulkLoading
+                                            ? "Importing Students..."
+                                            : `Import ${bulkPreview.students.length} Students`
+                                    }
+                                    onPress={handleConfirmBulkImport}
+                                />
+
+                                <Pressable
+                                    onPress={() => !isBulkLoading && setIsBulkModalOpen(false)}
+                                    style={myClassPagesStyle.cancelButton}
+                                >
+                                    <Text style={myClassPagesStyle.cancelButtonText}>Cancel</Text>
+                                </Pressable>
+                            </ScrollView>
+                        )}
+                    </View>
+                </View>
             </Modal>
 
             <DialogMessage
