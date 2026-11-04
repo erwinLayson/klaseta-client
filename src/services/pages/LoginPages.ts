@@ -1,3 +1,4 @@
+import bcrypt from "bcryptjs";
 import { getDatabase } from "../database/connection";
 import type { UserCredentialProp } from "../../types/users";
 
@@ -26,7 +27,8 @@ export async function handleLogin(credential: UserCredentialProp): Promise<Login
             return { success: false, message: "Account not found. Please check your username." };
         }
 
-        if (user.password !== password) {
+        const isPasswordMatch = await bcrypt.compare(password, user.password);
+        if (!isPasswordMatch && user.password !== password) {
             return { success: false, message: "Incorrect password. Please try again." };
         }
 

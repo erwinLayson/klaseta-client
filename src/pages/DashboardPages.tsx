@@ -2,7 +2,7 @@ import { useState } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { dashboardPagesStyle } from "../styles/index";
 import { RootParamList } from "../types/RootParamList";
 import { BottomNavBar, type NavTab } from "../components/index";
