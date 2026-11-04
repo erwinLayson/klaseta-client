@@ -416,8 +416,78 @@ export function AttendancePages() {
                                 </View>
                             )}
                         </View>
+                    </View>
 
-                        {/* Save All Button moved into Table Header */}
+                    {/* Horizontal Flexbox Row: Search Filter, Filter by Date, and Save All Button */}
+                    <View style={attendancePagesStyle.controlsRow}>
+                        {/* 1. Search Filter by Student Name */}
+                        <View style={attendancePagesStyle.filterInputWrapper}>
+                            <Ionicons name="search-outline" size={17} color="#4F46E5" />
+                            <TextInput
+                                style={attendancePagesStyle.filterInput}
+                                placeholder="Search student..."
+                                placeholderTextColor="#94A3B8"
+                                value={nameQuery}
+                                onChangeText={setNameQuery}
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                            />
+                            {nameQuery.length > 0 && (
+                                <Pressable
+                                    onPress={() => setNameQuery("")}
+                                    style={attendancePagesStyle.filterClearButton}
+                                    hitSlop={8}
+                                >
+                                    <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                                </Pressable>
+                            )}
+                        </View>
+
+                        {/* 2. Filter Attendance by Specific Date */}
+                        <Pressable
+                            onPress={() => setIsDateSelectModalOpen(true)}
+                            style={({ pressed }) => [
+                                attendancePagesStyle.filterSelectWrapper,
+                                selectedDate !== "" && attendancePagesStyle.filterSelectWrapperActive,
+                                pressed && attendancePagesStyle.filterSelectWrapperPressed,
+                            ]}
+                        >
+                            <View style={attendancePagesStyle.filterSelectLeft}>
+                                <Ionicons
+                                    name={selectedDate ? "calendar" : "calendar-outline"}
+                                    size={17}
+                                    color={selectedDate ? "#059669" : "#64748B"}
+                                />
+                                <Text
+                                    style={[
+                                        attendancePagesStyle.filterSelectValue,
+                                        !selectedDate && attendancePagesStyle.filterSelectPlaceholder,
+                                    ]}
+                                    numberOfLines={1}
+                                >
+                                    {selectedDate ? formatDateHeader(selectedDate) : "Select date..."}
+                                </Text>
+                            </View>
+
+                            <View style={attendancePagesStyle.filterSelectRight}>
+                                {selectedDate !== "" ? (
+                                    <Pressable
+                                        onPress={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedDate("");
+                                        }}
+                                        hitSlop={8}
+                                        style={attendancePagesStyle.filterClearButton}
+                                    >
+                                        <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                                    </Pressable>
+                                ) : (
+                                    <Ionicons name="chevron-down" size={15} color="#64748B" />
+                                )}
+                            </View>
+                        </Pressable>
+
+                        {/* 3. Save All Button */}
                         <Pressable
                             onPress={handleSaveAll}
                             disabled={isSaving || !hasUnsavedChanges}
@@ -444,83 +514,6 @@ export function AttendancePages() {
                             >
                                 {isSaving ? "Saving..." : "Save All"}
                             </Text>
-                        </Pressable>
-                    </View>
-
-                    {/* Two Separate Search Filters: By Name and By Date */}
-                    <View style={attendancePagesStyle.filtersWrapper}>
-                        {/* 1. Filter by Student Name */}
-                        <View style={attendancePagesStyle.filterInputWrapper}>
-                            <Ionicons name="search-outline" size={18} color="#4F46E5" />
-                            <TextInput
-                                style={attendancePagesStyle.filterInput}
-                                placeholder="Filter students by name (e.g. Juan, Dela Cruz)..."
-                                placeholderTextColor="#94A3B8"
-                                value={nameQuery}
-                                onChangeText={setNameQuery}
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                            />
-                            {nameQuery.length > 0 && (
-                                <Pressable
-                                    onPress={() => setNameQuery("")}
-                                    style={attendancePagesStyle.filterClearButton}
-                                    hitSlop={8}
-                                >
-                                    <Ionicons name="close-circle" size={18} color="#94A3B8" />
-                                </Pressable>
-                            )}
-                        </View>
-
-                        {/* 2. Filter Attendance by Specific Date (Selection) */}
-                        <Pressable
-                            onPress={() => setIsDateSelectModalOpen(true)}
-                            style={({ pressed }) => [
-                                attendancePagesStyle.filterSelectWrapper,
-                                selectedDate !== "" && attendancePagesStyle.filterSelectWrapperActive,
-                                pressed && attendancePagesStyle.filterSelectWrapperPressed,
-                            ]}
-                        >
-                            <View style={attendancePagesStyle.filterSelectLeft}>
-                                <Ionicons
-                                    name={selectedDate ? "calendar" : "calendar-outline"}
-                                    size={18}
-                                    color={selectedDate ? "#059669" : "#64748B"}
-                                />
-                                <View style={{ flex: 1 }}>
-                                    {selectedDate ? (
-                                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                                            <Text style={attendancePagesStyle.filterSelectLabel}>Date:</Text>
-                                            <Text
-                                                style={attendancePagesStyle.filterSelectValue}
-                                                numberOfLines={1}
-                                            >
-                                                {formatFullDate(selectedDate)}
-                                            </Text>
-                                        </View>
-                                    ) : (
-                                        <Text style={attendancePagesStyle.filterSelectPlaceholder}>
-                                            Select specific date (All dates shown)...
-                                        </Text>
-                                    )}
-                                </View>
-                            </View>
-
-                            <View style={attendancePagesStyle.filterSelectRight}>
-                                {selectedDate !== "" ? (
-                                    <Pressable
-                                        onPress={(e) => {
-                                            e.stopPropagation();
-                                            setSelectedDate("");
-                                        }}
-                                        hitSlop={8}
-                                        style={attendancePagesStyle.filterClearButton}
-                                    >
-                                        <Ionicons name="close-circle" size={18} color="#94A3B8" />
-                                    </Pressable>
-                                ) : null}
-                                <Ionicons name="chevron-down" size={16} color="#64748B" />
-                            </View>
                         </Pressable>
                     </View>
 
