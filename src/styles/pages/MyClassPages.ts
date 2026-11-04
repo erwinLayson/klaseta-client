@@ -80,7 +80,7 @@ export const styles = StyleSheet.create({
     statsRow: {
         flexDirection: "row",
         gap: 12,
-        marginBottom: 24,
+        marginBottom: 20,
     },
     statCard: {
         flex: 1,
@@ -109,52 +109,169 @@ export const styles = StyleSheet.create({
     section: {
         marginBottom: 24,
     },
+    sectionHeaderRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 12,
+    },
     sectionTitle: {
         fontSize: 18,
         fontWeight: "700",
         color: "#0F172A",
-        marginBottom: 12,
         letterSpacing: -0.2,
     },
-    studentCard: {
+    countBadge: {
+        backgroundColor: "#EEF2FF",
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 10,
+    },
+    countBadgeText: {
+        fontSize: 12,
+        fontWeight: "700",
+        color: "#4F46E5",
+    },
+    filterContainer: {
         flexDirection: "row",
         alignItems: "center",
         backgroundColor: "#FFFFFF",
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        borderRadius: 14,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        marginBottom: 14,
+        gap: 10,
+        shadowColor: "#0F172A",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
+        elevation: 1,
+    },
+    filterInput: {
+        flex: 1,
+        fontSize: 14,
+        color: "#0F172A",
+        padding: 0,
+    },
+    filterClearButton: {
+        padding: 4,
+    },
+    tableCard: {
+        backgroundColor: "#FFFFFF",
+        borderRadius: 18,
+        overflow: "hidden",
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
         shadowColor: "#0F172A",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.05,
         shadowRadius: 10,
         elevation: 2,
     },
-    avatar: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: "#EEF2FF",
-        justifyContent: "center",
+    tableHeader: {
+        flexDirection: "row",
         alignItems: "center",
-        marginRight: 14,
+        backgroundColor: "#F8FAFC",
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: "#E2E8F0",
     },
-    avatarText: {
-        fontSize: 16,
+    tableHeaderCell: {
+        fontSize: 12,
+        fontWeight: "700",
+        color: "#475569",
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+    },
+    tableHeaderNameCell: {
+        flex: 1,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+        paddingHorizontal: 6,
+    },
+    tableRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        paddingVertical: 13,
+        paddingHorizontal: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: "#F1F5F9",
+    },
+    tableRowEven: {
+        backgroundColor: "#FFFFFF",
+    },
+    tableRowOdd: {
+        backgroundColor: "#FAFAFD",
+    },
+    tableCellIndex: {
+        width: 34,
+        fontSize: 13,
+        fontWeight: "600",
+        color: "#94A3B8",
+        textAlign: "center",
+    },
+    tableCellName: {
+        flex: 1,
+        paddingHorizontal: 6,
+    },
+    studentFullName: {
+        fontSize: 14,
+        fontWeight: "600",
+        color: "#0F172A",
+    },
+    tableCellSuffix: {
+        width: 60,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    suffixBadge: {
+        backgroundColor: "#EEF2FF",
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 8,
+    },
+    suffixBadgeText: {
+        fontSize: 11,
         fontWeight: "700",
         color: "#4F46E5",
     },
-    studentInfo: {
-        flex: 1,
+    noSuffixText: {
+        fontSize: 14,
+        color: "#CBD5E1",
     },
-    studentName: {
-        fontSize: 16,
-        fontWeight: "700",
-        color: "#0F172A",
-        marginBottom: 2,
-    },
-    studentMeta: {
-        fontSize: 13,
+    tableCellId: {
+        width: 50,
+        fontSize: 12,
         color: "#64748B",
+        textAlign: "right",
+        fontWeight: "500",
+    },
+    tableEmptyMessage: {
+        paddingVertical: 32,
+        paddingHorizontal: 20,
+        alignItems: "center",
+    },
+    tableEmptyText: {
+        fontSize: 14,
+        color: "#64748B",
+        marginTop: 8,
+        textAlign: "center",
+    },
+    clearFilterButton: {
+        marginTop: 12,
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        backgroundColor: "#EEF2FF",
+        borderRadius: 10,
+    },
+    clearFilterButtonText: {
+        fontSize: 13,
+        fontWeight: "600",
+        color: "#4F46E5",
     },
     emptyCard: {
         backgroundColor: "#FFFFFF",
@@ -232,4 +349,3 @@ export const styles = StyleSheet.create({
         color: "#64748B",
     },
 });
-

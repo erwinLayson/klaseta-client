@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
     View,
     Text,
     ScrollView,
     Pressable,
     Modal,
+    TextInput,
     KeyboardAvoidingView,
     Platform,
 } from "react-native";
@@ -43,6 +44,9 @@ export function MyClassPages() {
     const { username } = route.params;
 
     const [students, setStudents] = useState<Student[]>([]);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [sortAsc, setSortAsc] = useState<boolean | null>(null);
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -134,18 +138,40 @@ export function MyClassPages() {
         }
     };
 
-    const formatStudentName = (student: Student) => {
+    const formatStudentName = useCallback((student: Student) => {
         const parts = [student.firstname];
         if (student.middlename) parts.push(student.middlename);
         parts.push(student.lastname);
         if (student.suffix && student.suffix !== "None") parts.push(student.suffix);
         return parts.join(" ");
-    };
+    }, []);
 
-    const getInitials = (student: Student) => {
-        const first = student.firstname.charAt(0).toUpperCase();
-        const last = student.lastname.charAt(0).toUpperCase();
-        return `${first}${last}`;
+    const filteredStudents = useMemo(() => {
+        let result = students;
+
+        if (searchQuery.trim()) {
+            const query = searchQuery.trim().toLowerCase();
+            result = result.filter((student) => {
+                const fullName = formatStudentName(student).toLowerCase();
+                return fullName.includes(query);
+            });
+        }
+
+        if (sortAsc !== null) {
+            result = [...result].sort((a, b) => {
+                const nameA = `${a.lastname} ${a.firstname}`.toLowerCase();
+                const nameB = `${b.lastname} ${b.firstname}`.toLowerCase();
+                return sortAsc ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+            });
+        }
+
+        return result;
+    }, [students, searchQuery, sortAsc, formatStudentName]);
+
+    const toggleSort = () => {
+        if (sortAsc === null) setSortAsc(true);
+        else if (sortAsc === true) setSortAsc(false);
+        else setSortAsc(null);
     };
 
     return (
@@ -192,10 +218,39 @@ export function MyClassPages() {
                 </View>
 
                 <View style={myClassPagesStyle.section}>
-                    <Text style={myClassPagesStyle.sectionTitle}>
-                        Students Roster ({students.length})
-                    </Text>
+                    <View style={myClassPagesStyle.sectionHeaderRow}>
+                        <Text style={myClassPagesStyle.sectionTitle}>Students Roster</Text>
+                        <View style={myClassPagesStyle.countBadge}>
+                            <Text style={myClassPagesStyle.countBadgeText}>
+                                {filteredStudents.length} of {students.length}
+                            </Text>
+                        </View>
+                    </View>
 
+                    {/* Filter by Name Header */}
+                    <View style={myClassPagesStyle.filterContainer}>
+                        <Ionicons name="search-outline" size={18} color="#94A3B8" />
+                        <TextInput
+                            style={myClassPagesStyle.filterInput}
+                            placeholder="Filter by student name..."
+                            placeholderTextColor="#94A3B8"
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                        />
+                        {searchQuery.length > 0 && (
+                            <Pressable
+                                onPress={() => setSearchQuery("")}
+                                style={myClassPagesStyle.filterClearButton}
+                                hitSlop={8}
+                            >
+                                <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                            </Pressable>
+                        )}
+                    </View>
+
+                    {/* Students Table */}
                     {students.length === 0 ? (
                         <View style={myClassPagesStyle.emptyCard}>
                             <Ionicons
@@ -220,27 +275,133 @@ export function MyClassPages() {
                             </Pressable>
                         </View>
                     ) : (
-                        students.map((student) => (
-                            <View key={student.id} style={myClassPagesStyle.studentCard}>
-                                <View style={myClassPagesStyle.avatar}>
-                                    <Text style={myClassPagesStyle.avatarText}>
-                                        {getInitials(student)}
-                                    </Text>
-                                </View>
-                                <View style={myClassPagesStyle.studentInfo}>
-                                    <Text style={myClassPagesStyle.studentName}>
-                                        {formatStudentName(student)}
-                                    </Text>
-                                    <Text style={myClassPagesStyle.studentMeta}>
-                                        Student ID: #{student.id}
-                                    </Text>
-                                </View>
+                        <View style={myClassPagesStyle.tableCard}>
+                            {/* Table Header Row */}
+                            <View style={myClassPagesStyle.tableHeader}>
+                                <Text
+                                    style={[
+                                        myClassPagesStyle.tableHeaderCell,
+                                        myClassPagesStyle.tableCellIndex,
+                                    ]}
+                                >
+                                    #
+                                </Text>
+
+                                <Pressable
+                                    onPress={toggleSort}
+                                    style={myClassPagesStyle.tableHeaderNameCell}
+                                >
+                                    <Text style={myClassPagesStyle.tableHeaderCell}>Name</Text>
+                                    <Ionicons
+                                        name={
+                                            sortAsc === true
+                                                ? "arrow-up"
+                                                : sortAsc === false
+                                                ? "arrow-down"
+                                                : "swap-vertical"
+                                        }
+                                        size={14}
+                                        color={sortAsc !== null ? "#4F46E5" : "#94A3B8"}
+                                    />
+                                </Pressable>
+
+                                <Text
+                                    style={[
+                                        myClassPagesStyle.tableHeaderCell,
+                                        myClassPagesStyle.tableCellSuffix,
+                                        { textAlign: "center" },
+                                    ]}
+                                >
+                                    Suffix
+                                </Text>
+
+                                <Text
+                                    style={[
+                                        myClassPagesStyle.tableHeaderCell,
+                                        myClassPagesStyle.tableCellId,
+                                    ]}
+                                >
+                                    ID
+                                </Text>
                             </View>
-                        ))
+
+                            {/* Table Body Rows */}
+                            {filteredStudents.length === 0 ? (
+                                <View style={myClassPagesStyle.tableEmptyMessage}>
+                                    <Ionicons name="search" size={28} color="#CBD5E1" />
+                                    <Text style={myClassPagesStyle.tableEmptyText}>
+                                        No students found matching &quot;{searchQuery}&quot;
+                                    </Text>
+                                    <Pressable
+                                        onPress={() => setSearchQuery("")}
+                                        style={myClassPagesStyle.clearFilterButton}
+                                    >
+                                        <Text style={myClassPagesStyle.clearFilterButtonText}>
+                                            Clear Filter
+                                        </Text>
+                                    </Pressable>
+                                </View>
+                            ) : (
+                                filteredStudents.map((student, index) => {
+                                    const hasSuffix =
+                                        student.suffix && student.suffix !== "None";
+
+                                    return (
+                                        <View
+                                            key={student.id}
+                                            style={[
+                                                myClassPagesStyle.tableRow,
+                                                index % 2 === 0
+                                                    ? myClassPagesStyle.tableRowEven
+                                                    : myClassPagesStyle.tableRowOdd,
+                                            ]}
+                                        >
+                                            <Text style={myClassPagesStyle.tableCellIndex}>
+                                                {index + 1}
+                                            </Text>
+
+                                            <View style={myClassPagesStyle.tableCellName}>
+                                                <Text
+                                                    style={myClassPagesStyle.studentFullName}
+                                                    numberOfLines={1}
+                                                >
+                                                    {student.firstname}{" "}
+                                                    {student.middlename ? `${student.middlename} ` : ""}
+                                                    {student.lastname}
+                                                </Text>
+                                            </View>
+
+                                            <View style={myClassPagesStyle.tableCellSuffix}>
+                                                {hasSuffix ? (
+                                                    <View style={myClassPagesStyle.suffixBadge}>
+                                                        <Text
+                                                            style={
+                                                                myClassPagesStyle.suffixBadgeText
+                                                            }
+                                                        >
+                                                            {student.suffix}
+                                                        </Text>
+                                                    </View>
+                                                ) : (
+                                                    <Text style={myClassPagesStyle.noSuffixText}>
+                                                        —
+                                                    </Text>
+                                                )}
+                                            </View>
+
+                                            <Text style={myClassPagesStyle.tableCellId}>
+                                                #{student.id}
+                                            </Text>
+                                        </View>
+                                    );
+                                })
+                            )}
+                        </View>
                     )}
                 </View>
             </ScrollView>
 
+            {/* Add Student Modal */}
             <Modal
                 visible={isModalOpen}
                 transparent
