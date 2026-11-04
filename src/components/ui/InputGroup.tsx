@@ -1,15 +1,16 @@
 import { useState } from "react";
-import { StyleSheet, Text, View, TextInput } from "react-native";
+import { StyleSheet, Text, View, TextInput, type KeyboardTypeOptions } from "react-native";
 
 interface InputGroupProps {
     label: string,
     value?: string,
     placeholder: string,
     onChangeText?: (value: string) => void,
-    secureText?: boolean
+    secureText?: boolean,
+    keyboardType?: KeyboardTypeOptions
 }
 
-export function InputGroup({ label, placeholder, value, onChangeText, secureText }: InputGroupProps) {
+export function InputGroup({ label, placeholder, value, onChangeText, secureText, keyboardType }: InputGroupProps) {
     const [isFocused, setIsFocused] = useState(false);
 
     return (
@@ -25,6 +26,7 @@ export function InputGroup({ label, placeholder, value, onChangeText, secureText
                 onBlur={() => setIsFocused(false)}
                 secureTextEntry={secureText}
                 selectionColor="#4F46E5"
+                keyboardType={keyboardType}
             />
         </View>
     )

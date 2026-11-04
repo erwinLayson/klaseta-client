@@ -3,10 +3,12 @@ import { createUsersTable } from "./001_create_users_table";
 import { createStudentsTable } from "./002_create_students_table";
 import { alterStudentsTableNullable } from "./003_alter_students_table_nullable";
 import { createAttendanceTables } from "./004_create_attendance_tables";
+import { createGradebookTables } from "./005_create_gradebook_tables";
 
 export const migrations: Migration[] = [
     createUsersTable,
     createStudentsTable,
     alterStudentsTableNullable,
     createAttendanceTables,
+    createGradebookTables,
 ];
