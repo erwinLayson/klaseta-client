@@ -50,5 +50,35 @@ export interface GradebookSpreadsheetData {
     weights: GradingWeight[];
     assessments: Assessment[];
     scoresMap: Record<string, string>; // key: `${studentId}_${assessmentId}` -> score string
+    attendanceMap: Record<number, { present: number; total: number; percentage: number }>;
 }
+
+export interface CategoryGradeBreakdown {
+    weightId: number | null;
+    weightName: string;
+    weightPercent: number;
+    totalScore: number;
+    totalMaxScore: number;
+    percentage: number;
+    weightedContribution: number;
+    assessmentCount: number;
+}
+
+export interface StudentCalculatedGrade {
+    studentId: number;
+    numericGrade: number | null;
+    displayGrade: string;
+    letterGrade: string;
+    status: "passed" | "failed" | "unrecorded";
+    statusLabel: string;
+    breakdown: CategoryGradeBreakdown[];
+    totalScoredAssessments: number;
+    totalAssessments: number;
+    attendance?: {
+        present: number;
+        total: number;
+        percentage: number;
+    };
+}
+
 

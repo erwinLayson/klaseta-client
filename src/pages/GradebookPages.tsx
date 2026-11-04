@@ -20,7 +20,9 @@ import type { Student } from "../types/student";
 import type {
     GradingWeight,
     Assessment,
+    StudentCalculatedGrade,
 } from "../types/gradebook";
+import { calculateStudentGrade } from "../utils/gradeCalculator";
 import {
     getGradebookSpreadsheet,
     createAssessment,
@@ -72,6 +74,7 @@ export function GradebookPages() {
     const [assessments, setAssessments] = useState<Assessment[]>([]);
     const [scoresMap, setScoresMap] = useState<Record<string, string>>({});
     const [savedScoresMap, setSavedScoresMap] = useState<Record<string, string>>({});
+    const [attendanceMap, setAttendanceMap] = useState<Record<number, { present: number; total: number; percentage: number }>>({});
 
     // Filters
     const [nameQuery, setNameQuery] = useState("");
@@ -102,6 +105,36 @@ export function GradebookPages() {
     // Hovered header cell id (for web / focus)
     const [hoveredAssessmentId, setHoveredAssessmentId] = useState<number | null>(null);
 
+    // Selected student for grade calculation breakdown modal
+    const [selectedBreakdownStudent, setSelectedBreakdownStudent] = useState<Student | null>(null);
+
+    // Collapsed / Expanded student rows
+    const [expandedStudentIds, setExpandedStudentIds] = useState<Record<number, boolean>>({});
+
+    const toggleStudentExpanded = (studentId: number) => {
+        setExpandedStudentIds((prev) => ({
+            ...prev,
+            [studentId]: !prev[studentId],
+        }));
+    };
+
+    const isAllExpanded = useMemo(() => {
+        if (students.length === 0) return false;
+        return students.every((s) => expandedStudentIds[s.id]);
+    }, [students, expandedStudentIds]);
+
+    const handleToggleExpandAll = () => {
+        if (isAllExpanded) {
+            setExpandedStudentIds({});
+        } else {
+            const next: Record<number, boolean> = {};
+            for (const s of students) {
+                next[s.id] = true;
+            }
+            setExpandedStudentIds(next);
+        }
+    };
+
     // Dialog messages
     const [dialog, setDialog] = useState({
         visible: false,
@@ -117,6 +150,7 @@ export function GradebookPages() {
         setAssessments(data.assessments);
         setScoresMap(data.scoresMap);
         setSavedScoresMap(data.scoresMap);
+        setAttendanceMap(data.attendanceMap || {});
     }, [username]);
 
     useEffect(() => {
@@ -129,6 +163,7 @@ export function GradebookPages() {
                 setAssessments(data.assessments);
                 setScoresMap(data.scoresMap);
                 setSavedScoresMap(data.scoresMap);
+                setAttendanceMap(data.attendanceMap || {});
             }
         };
         fetchSpreadsheet();
@@ -181,38 +216,45 @@ export function GradebookPages() {
         return weights.reduce((sum, w) => sum + w.weight, 0);
     }, [weights]);
 
+    // Calculate final grades for each student based on their scores, weights & attendance
+    const studentGradesMap = useMemo<Record<number, StudentCalculatedGrade>>(() => {
+        const map: Record<number, StudentCalculatedGrade> = {};
+        for (const student of students) {
+            map[student.id] = calculateStudentGrade(
+                student.id,
+                assessments,
+                weights,
+                scoresMap,
+                attendanceMap[student.id]
+            );
+        }
+        return map;
+    }, [students, assessments, weights, scoresMap, attendanceMap]);
+
     // Gradebook Stats
     const stats = useMemo(() => {
         const totalAssessments = assessments.length;
-        const totalPossibleEntries = students.length * totalAssessments;
         let gradedCount = 0;
-        let totalScoreSum = 0;
-        let totalMaxSum = 0;
-
-        for (const [key, scoreStr] of Object.entries(scoresMap)) {
-            if (scoreStr.trim() !== "") {
-                const score = parseFloat(scoreStr);
-                if (!isNaN(score)) {
-                    gradedCount++;
-                    const [, assessmentIdStr] = key.split("_");
-                    const assessment = assessments.find((a) => a.id === Number(assessmentIdStr));
-                    if (assessment && assessment.maxScore > 0) {
-                        totalScoreSum += score;
-                        totalMaxSum += assessment.maxScore;
-                    }
-                }
-            }
+        for (const val of Object.values(scoresMap)) {
+            if (val.trim() !== "") gradedCount++;
         }
 
-        const avgScorePercent = totalMaxSum > 0 ? Math.round((totalScoreSum / totalMaxSum) * 100) : 0;
+        const gradedStudents = Object.values(studentGradesMap).filter((g) => g.numericGrade !== null);
+        const sumGrades = gradedStudents.reduce((acc, g) => acc + (g.numericGrade ?? 0), 0);
+        const avgGrade = gradedStudents.length > 0 ? Math.round((sumGrades / gradedStudents.length) * 10) / 10 : 0;
+
+        const passingStudents = gradedStudents.filter((g) => (g.numericGrade ?? 0) >= 75);
+        const passingRate = gradedStudents.length > 0 ? Math.round((passingStudents.length / gradedStudents.length) * 100) : 0;
 
         return {
             totalAssessments,
-            totalPossibleEntries,
             gradedCount,
-            avgScorePercent: `${avgScorePercent}%`,
+            avgGrade: gradedStudents.length > 0 ? `${avgGrade}%` : "—",
+            passingRate: gradedStudents.length > 0 ? `${passingRate}%` : "—",
+            passingCount: passingStudents.length,
+            totalGradedStudents: gradedStudents.length,
         };
-    }, [assessments, students, scoresMap]);
+    }, [assessments, scoresMap, studentGradesMap]);
 
     // Options for SelectGroup when creating/editing assessment
     const weightSelectOptions = useMemo<SelectOption[]>(() => {
@@ -602,15 +644,15 @@ export function GradebookPages() {
                     </View>
                     <View style={gradebookPagesStyle.statCard}>
                         <Text style={[gradebookPagesStyle.statValue, { color: "#059669" }]}>
-                            {stats.avgScorePercent}
+                            {stats.avgGrade}
                         </Text>
                         <Text style={gradebookPagesStyle.statLabel}>Class Avg</Text>
                     </View>
                     <View style={gradebookPagesStyle.statCard}>
                         <Text style={[gradebookPagesStyle.statValue, { color: "#4F46E5" }]}>
-                            {weights.length}
+                            {stats.passingRate}
                         </Text>
-                        <Text style={gradebookPagesStyle.statLabel}>Weights ({totalWeightPercent}%)</Text>
+                        <Text style={gradebookPagesStyle.statLabel}>Passing Rate</Text>
                     </View>
                 </View>
 
@@ -618,9 +660,6 @@ export function GradebookPages() {
                 <View style={gradebookPagesStyle.section}>
                     <View style={gradebookPagesStyle.sectionHeaderRow}>
                         <View style={gradebookPagesStyle.sectionHeaderLeft}>
-                            <Text style={gradebookPagesStyle.sectionTitle}>
-                                Gradebook Spreadsheet
-                            </Text>
                             <View style={gradebookPagesStyle.countBadge}>
                                 <Text style={gradebookPagesStyle.countBadgeText}>
                                     {filteredStudents.length} of {students.length} students
@@ -631,6 +670,25 @@ export function GradebookPages() {
                                     {filteredAssessments.length} of {assessments.length} assessments
                                 </Text>
                             </View>
+
+                            {/* Expand All / Collapse All Button */}
+                            {students.length > 0 && (
+                                <Pressable
+                                    onPress={handleToggleExpandAll}
+                                    style={gradebookPagesStyle.expandAllBtn}
+                                    hitSlop={6}
+                                >
+                                    <Ionicons
+                                        name={isAllExpanded ? "contract-outline" : "expand-outline"}
+                                        size={12}
+                                        color="#4F46E5"
+                                    />
+                                    <Text style={gradebookPagesStyle.expandAllBtnText}>
+                                        {isAllExpanded ? "Collapse All" : "Expand All"}
+                                    </Text>
+                                </Pressable>
+                            )}
+
                             {hasUnsavedChanges && (
                                 <View style={gradebookPagesStyle.unsavedBadge}>
                                     <Ionicons name="alert-circle" size={12} color="#D97706" />
@@ -842,37 +900,141 @@ export function GradebookPages() {
                     ) : (
                         <View style={gradebookPagesStyle.spreadsheetCard}>
                             <View style={gradebookPagesStyle.spreadsheetWrapper}>
-                                {/* First Column: Fixed Student Names */}
+                                {/* First Column: Fixed Student Names & Calculated Grades */}
                                 <View style={gradebookPagesStyle.studentFixedColumn}>
                                     {/* Header Cell */}
                                     <View style={gradebookPagesStyle.studentHeaderCell}>
-                                        <Text style={gradebookPagesStyle.studentHeaderCellText}>
-                                            Student Name
-                                        </Text>
+                                        <View style={gradebookPagesStyle.studentHeaderTopRow}>
+                                            <Text style={gradebookPagesStyle.studentHeaderCellText}>
+                                                Student Name
+                                            </Text>
+                                            <Text style={gradebookPagesStyle.gradeHeaderColText}>
+                                                Grade
+                                            </Text>
+                                        </View>
                                         <Text style={gradebookPagesStyle.studentHeaderCellSub}>
-                                            {filteredStudents.length} Students
+                                            {filteredStudents.length} Students • Avg: {stats.avgGrade}
                                         </Text>
                                     </View>
 
-                                    {/* Student Rows */}
-                                    {filteredStudents.map((student, idx) => (
-                                        <View
-                                            key={student.id}
-                                            style={[
-                                                gradebookPagesStyle.studentRowCell,
-                                                idx % 2 === 0
-                                                    ? gradebookPagesStyle.rowEven
-                                                    : gradebookPagesStyle.rowOdd,
-                                            ]}
-                                        >
-                                            <Text
-                                                style={gradebookPagesStyle.studentRowText}
-                                                numberOfLines={1}
+                                    {/* Student Rows with Collapsible & Expandable Details */}
+                                    {filteredStudents.map((student, idx) => {
+                                        const isExpanded = !!expandedStudentIds[student.id];
+                                        const gradeInfo = studentGradesMap[student.id];
+                                        const num = gradeInfo?.numericGrade ?? null;
+                                        const isHigh = num !== null && num >= 90;
+                                        const isMid = num !== null && num >= 80 && num < 90;
+                                        const isPassing = num !== null && num >= 75 && num < 80;
+                                        const isFailed = num !== null && num < 75;
+
+                                        return (
+                                            <View
+                                                key={student.id}
+                                                style={[
+                                                    gradebookPagesStyle.studentRowContainer,
+                                                    idx % 2 === 0
+                                                        ? gradebookPagesStyle.rowEven
+                                                        : gradebookPagesStyle.rowOdd,
+                                                    isExpanded && gradebookPagesStyle.rowExpanded,
+                                                ]}
                                             >
-                                                {student.firstname} {student.lastname}
-                                            </Text>
-                                        </View>
-                                    ))}
+                                                {/* Main Row (height 52) */}
+                                                <Pressable
+                                                    onPress={() => toggleStudentExpanded(student.id)}
+                                                    style={gradebookPagesStyle.studentRowMain}
+                                                >
+                                                    <Ionicons
+                                                        name={isExpanded ? "chevron-down" : "chevron-forward"}
+                                                        size={14}
+                                                        color="#64748B"
+                                                        style={{ marginRight: 2 }}
+                                                    />
+
+                                                    <Text
+                                                        style={gradebookPagesStyle.studentRowText}
+                                                        numberOfLines={1}
+                                                    >
+                                                        {student.firstname} {student.lastname}
+                                                    </Text>
+
+                                                    <Pressable
+                                                        onPress={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedBreakdownStudent(student);
+                                                        }}
+                                                        hitSlop={4}
+                                                        style={[
+                                                            gradebookPagesStyle.studentGradePill,
+                                                            isHigh
+                                                                ? gradebookPagesStyle.gradeBadgeHigh
+                                                                : isMid
+                                                                    ? gradebookPagesStyle.gradeBadgeMid
+                                                                    : isPassing
+                                                                        ? gradebookPagesStyle.gradeBadgePassing
+                                                                        : isFailed
+                                                                            ? gradebookPagesStyle.gradeBadgeFailed
+                                                                            : gradebookPagesStyle.gradeBadgeEmpty,
+                                                        ]}
+                                                    >
+                                                        <Text
+                                                            style={[
+                                                                gradebookPagesStyle.studentGradePillText,
+                                                                isHigh
+                                                                    ? gradebookPagesStyle.gradeTextHigh
+                                                                    : isMid
+                                                                        ? gradebookPagesStyle.gradeTextMid
+                                                                        : isPassing
+                                                                            ? gradebookPagesStyle.gradeTextPassing
+                                                                            : isFailed
+                                                                                ? gradebookPagesStyle.gradeTextFailed
+                                                                                : gradebookPagesStyle.gradeTextEmpty,
+                                                            ]}
+                                                        >
+                                                            {gradeInfo?.displayGrade || "—"}
+                                                        </Text>
+                                                    </Pressable>
+                                                </Pressable>
+
+                                                {/* Expanded Details Drawer (height 56) */}
+                                                {isExpanded && (
+                                                    <View style={gradebookPagesStyle.studentRowExpandedDrawer}>
+                                                        <View style={gradebookPagesStyle.expandedMetaRow}>
+                                                            <View style={gradebookPagesStyle.expandedStatusBadge}>
+                                                                <Text style={gradebookPagesStyle.expandedStatusText}>
+                                                                    {gradeInfo?.statusLabel || "No Scores"} ({gradeInfo?.letterGrade || "—"})
+                                                                </Text>
+                                                            </View>
+
+                                                            <Pressable
+                                                                onPress={() => setSelectedBreakdownStudent(student)}
+                                                                hitSlop={6}
+                                                                style={gradebookPagesStyle.expandedViewBtn}
+                                                            >
+                                                                <Text style={gradebookPagesStyle.expandedViewBtnText}>Breakdown</Text>
+                                                                <Ionicons name="arrow-forward" size={11} color="#4F46E5" />
+                                                            </Pressable>
+                                                        </View>
+
+                                                        <View style={gradebookPagesStyle.expandedChipsRow}>
+                                                            {gradeInfo && gradeInfo.breakdown.length > 0 ? (
+                                                                gradeInfo.breakdown.slice(0, 3).map((b, bIdx) => (
+                                                                    <View key={bIdx} style={gradebookPagesStyle.expandedChip}>
+                                                                        <Text style={gradebookPagesStyle.expandedChipText} numberOfLines={1}>
+                                                                            {b.weightName.slice(0, 8)}: {b.percentage}%
+                                                                        </Text>
+                                                                    </View>
+                                                                ))
+                                                            ) : (
+                                                                <Text style={gradebookPagesStyle.expandedEmptyHint}>
+                                                                    No assessments graded yet
+                                                                </Text>
+                                                            )}
+                                                        </View>
+                                                    </View>
+                                                )}
+                                            </View>
+                                        );
+                                    })}
                                 </View>
 
                                 {/* Horizontally Scrollable Assessment Columns */}
@@ -894,9 +1056,9 @@ export function GradebookPages() {
                                                         // Web hover support
                                                         {...(Platform.OS === "web"
                                                             ? {
-                                                                  onMouseEnter: () => setHoveredAssessmentId(assessment.id),
-                                                                  onMouseLeave: () => setHoveredAssessmentId(null),
-                                                              }
+                                                                onMouseEnter: () => setHoveredAssessmentId(assessment.id),
+                                                                onMouseLeave: () => setHoveredAssessmentId(null),
+                                                            }
                                                             : {})}
                                                     >
                                                         {/* Top row: Title + Edit/Delete Icons on Hover */}
@@ -960,63 +1122,110 @@ export function GradebookPages() {
                                         </View>
 
                                         {/* Score Input Cells per Student Row */}
-                                        {filteredStudents.map((student, rowIdx) => (
-                                            <View
-                                                key={student.id}
-                                                style={[
-                                                    { flexDirection: "row" },
-                                                    rowIdx % 2 === 0
-                                                        ? gradebookPagesStyle.rowEven
-                                                        : gradebookPagesStyle.rowOdd,
-                                                ]}
-                                            >
-                                                {filteredAssessments.map((assessment) => {
-                                                    const key = `${student.id}_${assessment.id}`;
-                                                    const currentScore = scoresMap[key] || "";
-                                                    const hasVal = currentScore.trim().length > 0;
-                                                    const numVal = parseFloat(currentScore);
-                                                    const isInvalid = hasVal && (numVal > assessment.maxScore || numVal < 0);
+                                        {filteredStudents.map((student, rowIdx) => {
+                                            const isExpanded = !!expandedStudentIds[student.id];
 
-                                                    return (
-                                                        <View
-                                                            key={assessment.id}
-                                                            style={gradebookPagesStyle.scoreCell}
-                                                        >
+                                            return (
+                                                <View
+                                                    key={student.id}
+                                                    style={[
+                                                        { flexDirection: "row" },
+                                                        rowIdx % 2 === 0
+                                                            ? gradebookPagesStyle.rowEven
+                                                            : gradebookPagesStyle.rowOdd,
+                                                        isExpanded && gradebookPagesStyle.rowExpanded,
+                                                    ]}
+                                                >
+                                                    {filteredAssessments.map((assessment) => {
+                                                        const key = `${student.id}_${assessment.id}`;
+                                                        const currentScore = scoresMap[key] || "";
+                                                        const hasVal = currentScore.trim().length > 0;
+                                                        const numVal = parseFloat(currentScore);
+                                                        const isInvalid = hasVal && (numVal > assessment.maxScore || numVal < 0);
+                                                        const percent = hasVal && !isInvalid && assessment.maxScore > 0
+                                                            ? Math.round((numVal / assessment.maxScore) * 100)
+                                                            : null;
+
+                                                        return (
                                                             <View
+                                                                key={assessment.id}
                                                                 style={[
-                                                                    gradebookPagesStyle.scoreInputWrapper,
-                                                                    isInvalid
-                                                                        ? gradebookPagesStyle.scoreInputError
-                                                                        : hasVal
-                                                                        ? gradebookPagesStyle.scoreInputHasValue
-                                                                        : gradebookPagesStyle.scoreInputValid,
+                                                                    gradebookPagesStyle.scoreCell,
+                                                                    isExpanded && gradebookPagesStyle.scoreCellExpandedHeight,
                                                                 ]}
                                                             >
-                                                                <TextInput
-                                                                    style={gradebookPagesStyle.scoreInput}
-                                                                    value={currentScore}
-                                                                    placeholder="—"
-                                                                    placeholderTextColor="#CBD5E1"
-                                                                    keyboardType="decimal-pad"
-                                                                    selectTextOnFocus={true}
-                                                                    onChangeText={(val) =>
-                                                                        handleScoreChange(
-                                                                            assessment.id,
-                                                                            student.id,
-                                                                            assessment.maxScore,
-                                                                            val
-                                                                        )
-                                                                    }
-                                                                />
-                                                                <Text style={gradebookPagesStyle.scoreMaxHint}>
-                                                                    /{assessment.maxScore}
-                                                                </Text>
+                                                                <View style={gradebookPagesStyle.scoreCellMain}>
+                                                                    <View
+                                                                        style={[
+                                                                            gradebookPagesStyle.scoreInputWrapper,
+                                                                            isInvalid
+                                                                                ? gradebookPagesStyle.scoreInputError
+                                                                                : hasVal
+                                                                                    ? gradebookPagesStyle.scoreInputHasValue
+                                                                                    : gradebookPagesStyle.scoreInputValid,
+                                                                        ]}
+                                                                    >
+                                                                        <TextInput
+                                                                            style={gradebookPagesStyle.scoreInput}
+                                                                            value={currentScore}
+                                                                            placeholder="—"
+                                                                            placeholderTextColor="#CBD5E1"
+                                                                            keyboardType="decimal-pad"
+                                                                            selectTextOnFocus={true}
+                                                                            onChangeText={(val) =>
+                                                                                handleScoreChange(
+                                                                                    assessment.id,
+                                                                                    student.id,
+                                                                                    assessment.maxScore,
+                                                                                    val
+                                                                                )
+                                                                            }
+                                                                        />
+                                                                        <Text style={gradebookPagesStyle.scoreMaxHint}>
+                                                                            /{assessment.maxScore}
+                                                                        </Text>
+                                                                    </View>
+                                                                </View>
+
+                                                                {/* Expanded Percentage & Weight Details */}
+                                                                {isExpanded && (
+                                                                    <View style={gradebookPagesStyle.scoreCellDrawer}>
+                                                                        {percent !== null ? (
+                                                                            <View
+                                                                                style={[
+                                                                                    gradebookPagesStyle.cellPercentBadge,
+                                                                                    percent >= 75
+                                                                                        ? gradebookPagesStyle.cellPercentBadgePassed
+                                                                                        : gradebookPagesStyle.cellPercentBadgeFailed,
+                                                                                ]}
+                                                                            >
+                                                                                <Text
+                                                                                    style={[
+                                                                                        gradebookPagesStyle.cellPercentText,
+                                                                                        percent >= 75
+                                                                                            ? { color: "#15803D" }
+                                                                                            : { color: "#DC2626" },
+                                                                                    ]}
+                                                                                >
+                                                                                    {percent}%
+                                                                                </Text>
+                                                                            </View>
+                                                                        ) : (
+                                                                            <Text style={gradebookPagesStyle.cellPercentEmpty}>
+                                                                                Unscored
+                                                                            </Text>
+                                                                        )}
+                                                                        <Text style={gradebookPagesStyle.cellWeightLabel} numberOfLines={1}>
+                                                                            {assessment.weightName || "Standard"}
+                                                                        </Text>
+                                                                    </View>
+                                                                )}
                                                             </View>
-                                                        </View>
-                                                    );
-                                                })}
-                                            </View>
-                                        ))}
+                                                        );
+                                                    })}
+                                                </View>
+                                            );
+                                        })}
                                     </View>
                                 </ScrollView>
                             </View>
@@ -1099,8 +1308,8 @@ export function GradebookPages() {
                                     isSubmittingAssessment
                                         ? "Saving..."
                                         : editingAssessment
-                                        ? "Update Assessment"
-                                        : "Create Assessment"
+                                            ? "Update Assessment"
+                                            : "Create Assessment"
                                 }
                                 onPress={handleSubmitAssessment}
                             />
@@ -1257,6 +1466,198 @@ export function GradebookPages() {
                         </ScrollView>
                     </View>
                 </KeyboardAvoidingView>
+            </Modal>
+
+            {/* Student Grade Calculation Breakdown Modal */}
+            <Modal
+                visible={selectedBreakdownStudent !== null}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setSelectedBreakdownStudent(null)}
+            >
+                <View style={gradebookPagesStyle.modalOverlay}>
+                    <View style={gradebookPagesStyle.modalContent}>
+                        <View style={gradebookPagesStyle.modalHeader}>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                                <Ionicons name="ribbon-outline" size={22} color="#4F46E5" />
+                                <Text style={gradebookPagesStyle.modalTitle}>Grade Breakdown</Text>
+                            </View>
+                            <Pressable
+                                onPress={() => setSelectedBreakdownStudent(null)}
+                                hitSlop={8}
+                            >
+                                <Ionicons name="close" size={22} color="#64748B" />
+                            </Pressable>
+                        </View>
+
+                        {selectedBreakdownStudent && (() => {
+                            const grade = studentGradesMap[selectedBreakdownStudent.id];
+                            const num = grade?.numericGrade ?? null;
+                            const isHigh = num !== null && num >= 90;
+                            const isMid = num !== null && num >= 80 && num < 90;
+                            const isPassing = num !== null && num >= 75 && num < 80;
+                            const isFailed = num !== null && num < 75;
+
+                            return (
+                                <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+                                    {/* Overall Grade Card */}
+                                    <View style={gradebookPagesStyle.breakdownCard}>
+                                        <View style={gradebookPagesStyle.breakdownHeaderRow}>
+                                            <View>
+                                                <Text style={gradebookPagesStyle.breakdownStudentName}>
+                                                    {selectedBreakdownStudent.firstname} {selectedBreakdownStudent.lastname}
+                                                </Text>
+                                                <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
+                                                    {grade?.totalScoredAssessments || 0} of {assessments.length} assessments scored
+                                                </Text>
+                                            </View>
+
+                                            <View
+                                                style={[
+                                                    gradebookPagesStyle.breakdownFinalGradeBox,
+                                                    isHigh
+                                                        ? gradebookPagesStyle.gradeBadgeHigh
+                                                        : isMid
+                                                            ? gradebookPagesStyle.gradeBadgeMid
+                                                            : isPassing
+                                                                ? gradebookPagesStyle.gradeBadgePassing
+                                                                : isFailed
+                                                                    ? gradebookPagesStyle.gradeBadgeFailed
+                                                                    : gradebookPagesStyle.gradeBadgeEmpty,
+                                                ]}
+                                            >
+                                                <Text
+                                                    style={[
+                                                        gradebookPagesStyle.breakdownFinalGradeText,
+                                                        isHigh
+                                                            ? gradebookPagesStyle.gradeTextHigh
+                                                            : isMid
+                                                                ? gradebookPagesStyle.gradeTextMid
+                                                                : isPassing
+                                                                    ? gradebookPagesStyle.gradeTextPassing
+                                                                    : isFailed
+                                                                        ? gradebookPagesStyle.gradeTextFailed
+                                                                        : gradebookPagesStyle.gradeTextEmpty,
+                                                    ]}
+                                                >
+                                                    {grade?.displayGrade || "—"}
+                                                </Text>
+                                            </View>
+                                        </View>
+
+                                        <Text
+                                            style={[
+                                                gradebookPagesStyle.breakdownStatusText,
+                                                isHigh
+                                                    ? gradebookPagesStyle.gradeTextHigh
+                                                    : isMid
+                                                        ? gradebookPagesStyle.gradeTextMid
+                                                        : isPassing
+                                                            ? gradebookPagesStyle.gradeTextPassing
+                                                            : isFailed
+                                                                ? gradebookPagesStyle.gradeTextFailed
+                                                                : gradebookPagesStyle.gradeTextEmpty,
+                                            ]}
+                                        >
+                                            {grade?.statusLabel} • Grade {grade?.letterGrade}
+                                        </Text>
+                                    </View>
+
+                                    {/* Weighted Categories Breakdown */}
+                                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                                        Weighted Categories
+                                    </Text>
+
+                                    {grade && grade.breakdown.length > 0 ? (
+                                        grade.breakdown.map((cat, idx) => (
+                                            <View key={idx} style={gradebookPagesStyle.breakdownCategoryItem}>
+                                                <View style={gradebookPagesStyle.breakdownCatTopRow}>
+                                                    <Text style={gradebookPagesStyle.breakdownCatName}>
+                                                        {cat.weightName} {cat.weightPercent > 0 ? `(${cat.weightPercent}%)` : ""}
+                                                    </Text>
+                                                    <Text style={gradebookPagesStyle.breakdownCatPercent}>
+                                                        {cat.percentage}%
+                                                    </Text>
+                                                </View>
+                                                <Text style={gradebookPagesStyle.breakdownCatSubText}>
+                                                    {cat.weightName.toLowerCase().includes("attendance")
+                                                        ? `Present: ${cat.totalScore} of ${cat.totalMaxScore} session${cat.totalMaxScore > 1 ? "s" : ""}`
+                                                        : `Total: ${cat.totalScore} / ${cat.totalMaxScore} pts`}
+                                                    {cat.weightPercent > 0 ? ` • Contributes: +${cat.weightedContribution}%` : ""}
+                                                </Text>
+
+                                                {/* Progress bar */}
+                                                <View style={gradebookPagesStyle.breakdownProgressBarBg}>
+                                                    <View
+                                                        style={[
+                                                            gradebookPagesStyle.breakdownProgressBarFill,
+                                                            { width: `${Math.min(100, Math.max(0, cat.percentage))}%` },
+                                                        ]}
+                                                    />
+                                                </View>
+                                            </View>
+                                        ))
+                                    ) : (
+                                        <Text style={{ fontSize: 13, color: "#94A3B8", fontStyle: "italic", marginBottom: 12 }}>
+                                            No scores entered yet for this student.
+                                        </Text>
+                                    )}
+
+                                    {/* Assessment Score Details */}
+                                    <Text style={{ fontSize: 13, fontWeight: "700", color: "#334155", marginTop: 8, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                                        Assessment Scores
+                                    </Text>
+
+                                    {assessments.map((a) => {
+                                        const key = `${selectedBreakdownStudent.id}_${a.id}`;
+                                        const score = scoresMap[key];
+                                        const hasScore = score !== undefined && score.trim() !== "";
+
+                                        return (
+                                            <View
+                                                key={a.id}
+                                                style={{
+                                                    flexDirection: "row",
+                                                    justifyContent: "space-between",
+                                                    alignItems: "center",
+                                                    paddingVertical: 8,
+                                                    borderBottomWidth: 1,
+                                                    borderBottomColor: "#F1F5F9",
+                                                }}
+                                            >
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#1E293B" }}>
+                                                        {a.title}
+                                                    </Text>
+                                                    <Text style={{ fontSize: 11, color: "#64748B" }}>
+                                                        Max: {a.maxScore} {a.weightName ? `• ${a.weightName}` : ""}
+                                                    </Text>
+                                                </View>
+
+                                                <Text
+                                                    style={{
+                                                        fontSize: 14,
+                                                        fontWeight: "700",
+                                                        color: hasScore ? "#0F172A" : "#94A3B8",
+                                                    }}
+                                                >
+                                                    {hasScore ? `${score} / ${a.maxScore}` : "Unrecorded"}
+                                                </Text>
+                                            </View>
+                                        );
+                                    })}
+
+                                    <Pressable
+                                        onPress={() => setSelectedBreakdownStudent(null)}
+                                        style={[gradebookPagesStyle.cancelButton, { marginTop: 14 }]}
+                                    >
+                                        <Text style={gradebookPagesStyle.cancelButtonText}>Close</Text>
+                                    </Pressable>
+                                </ScrollView>
+                            );
+                        })()}
+                    </View>
+                </View>
             </Modal>
 
             <DialogMessage

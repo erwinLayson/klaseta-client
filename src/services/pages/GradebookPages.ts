@@ -9,8 +9,9 @@ import type {
 } from "../../types/gradebook";
 
 const DEFAULT_WEIGHTS = [
+    { name: "Attendance", weight: 10 },
     { name: "Written Works", weight: 30 },
-    { name: "Performance Tasks", weight: 50 },
+    { name: "Performance Tasks", weight: 40 },
     { name: "Quarterly Assessment", weight: 20 },
 ];
 
@@ -212,7 +213,7 @@ export async function getGradebookSpreadsheet(
         );
 
         if (!teacher) {
-            return { students: [], weights: [], assessments: [], scoresMap: {} };
+            return { students: [], weights: [], assessments: [], scoresMap: {}, attendanceMap: {} };
         }
 
         const students = await db.getAllAsync<Student>(
@@ -270,15 +271,50 @@ export async function getGradebookSpreadsheet(
             scoresMap[`${s.studentId}_${s.assessmentId}`] = String(s.score);
         }
 
+        // Fetch total attendance sessions for teacher
+        const totalSessionsResult = await db.getFirstAsync<{ count: number }>(
+            "SELECT COUNT(*) as count FROM attendance_sessions WHERE teacherId = ?",
+            [teacher.id]
+        );
+        const totalAttendanceSessions = totalSessionsResult?.count ?? 0;
+
+        // Fetch present count per student
+        const attendanceRows = await db.getAllAsync<{
+            studentId: number;
+            presentCount: number;
+        }>(
+            `SELECT ar.studentId, COUNT(*) as presentCount
+             FROM attendance_records ar
+             JOIN attendance_sessions s ON ar.sessionId = s.id
+             WHERE s.teacherId = ? AND (ar.status = '1' OR ar.status = 'present')
+             GROUP BY ar.studentId`,
+            [teacher.id]
+        );
+
+        const attendanceMap: Record<number, { present: number; total: number; percentage: number }> = {};
+        for (const s of students) {
+            const row = (attendanceRows || []).find((r) => r.studentId === s.id);
+            const present = row?.presentCount ?? 0;
+            const percentage = totalAttendanceSessions > 0
+                ? Math.round((present / totalAttendanceSessions) * 1000) / 10
+                : 100;
+            attendanceMap[s.id] = {
+                present,
+                total: totalAttendanceSessions,
+                percentage,
+            };
+        }
+
         return {
             students: students ?? [],
             weights: weights ?? [],
             assessments,
             scoresMap,
+            attendanceMap,
         };
     } catch (error) {
         console.error("Error fetching gradebook spreadsheet:", error);
-        return { students: [], weights: [], assessments: [], scoresMap: {} };
+        return { students: [], weights: [], assessments: [], scoresMap: {}, attendanceMap: {} };
     }
 }
 
