@@ -81,7 +81,7 @@ export function AttendancePages() {
     // Class selection state
     const [classes, setClasses] = useState<ClassItem[]>([]);
     const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
-    const [isClassPickerOpen, setIsClassPickerOpen] = useState(false);
+    const [classSearchQuery, setClassSearchQuery] = useState("");
     const [isLoadingClasses, setIsLoadingClasses] = useState(true);
 
     const [students, setStudents] = useState<Student[]>([]);
@@ -109,6 +109,18 @@ export function AttendancePages() {
         return classes.find((c) => c.id === selectedClassId) || null;
     }, [classes, selectedClassId]);
 
+    // Filter classes for the cards view
+    const filteredClasses = useMemo(() => {
+        if (!classSearchQuery.trim()) return classes;
+        const q = classSearchQuery.trim().toLowerCase();
+        return classes.filter((c) => {
+            const name = c.name.toLowerCase();
+            const sec = (c.section || "").toLowerCase();
+            const sub = (c.subject || "").toLowerCase();
+            return name.includes(q) || sec.includes(q) || sub.includes(q);
+        });
+    }, [classes, classSearchQuery]);
+
     // Load classes
     useEffect(() => {
         let isMounted = true;
@@ -119,11 +131,9 @@ export function AttendancePages() {
                 if (!isMounted) return;
                 setClasses(list);
 
-                let initialClassId = routeClassId;
-                if (!initialClassId && list.length > 0) {
-                    initialClassId = list[0].id;
+                if (routeClassId) {
+                    setSelectedClassId(routeClassId);
                 }
-                setSelectedClassId(initialClassId || null);
             } finally {
                 if (isMounted) setIsLoadingClasses(false);
             }
@@ -377,78 +387,241 @@ export function AttendancePages() {
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
             >
-                {/* Header */}
-                <View style={attendancePagesStyle.header}>
-                    <View style={attendancePagesStyle.headerTopRow}>
-                        <View style={attendancePagesStyle.headerTitleRow}>
-                            <Ionicons name="clipboard-outline" size={26} color="#4F46E5" />
-                            <Text style={attendancePagesStyle.greeting}>Attendance</Text>
+                {!selectedClassId || !activeClass ? (
+                    /* =========================================================================
+                       VIEW 1: SELECT CLASS IN CARD FORMAT
+                       ========================================================================= */
+                    <>
+                        <View style={attendancePagesStyle.header}>
+                            <View style={attendancePagesStyle.headerTopRow}>
+                                <View style={attendancePagesStyle.headerTitleRow}>
+                                    <Ionicons name="clipboard-outline" size={26} color="#4F46E5" />
+                                    <Text style={attendancePagesStyle.greeting}>Class Attendance</Text>
+                                </View>
+                            </View>
+                            <Text style={attendancePagesStyle.subtitle}>
+                                Select a class card to view and record daily student attendance
+                            </Text>
                         </View>
 
-                        <Pressable
-                            onPress={handleOpenCreateModal}
-                            style={({ pressed }) => [
-                                attendancePagesStyle.createButton,
-                                pressed && attendancePagesStyle.createButtonPressed,
-                            ]}
-                        >
-                            <Ionicons name="add-circle-outline" size={16} color="#FFFFFF" />
-                            <Text style={attendancePagesStyle.createButtonText}>
-                                New Session
-                            </Text>
-                        </Pressable>
-                    </View>
-                    <Text style={attendancePagesStyle.subtitle}>
-                        Daily student attendance spreadsheet
-                    </Text>
-                </View>
-
-                {/* Class Selector Bar */}
-                {classes.length > 0 && (
-                    <Pressable
-                        onPress={() => setIsClassPickerOpen(true)}
-                        style={attendancePagesStyle.classSelectorBar}
-                    >
-                        <View style={attendancePagesStyle.classSelectorLeft}>
-                            <View
-                                style={[
-                                    attendancePagesStyle.classSelectorDot,
-                                    { backgroundColor: activeClass?.color || "#4F46E5" },
-                                ]}
+                        {/* Search Filter for Classes */}
+                        <View style={attendancePagesStyle.filterContainer}>
+                            <Ionicons name="search-outline" size={18} color="#94A3B8" />
+                            <TextInput
+                                style={attendancePagesStyle.filterInput}
+                                placeholder="Search classes by name, section, or subject..."
+                                placeholderTextColor="#94A3B8"
+                                value={classSearchQuery}
+                                onChangeText={setClassSearchQuery}
+                                autoCapitalize="none"
+                                autoCorrect={false}
                             />
-                            <View style={{ flex: 1 }}>
-                                <Text style={attendancePagesStyle.classSelectorLabel}>Active Class</Text>
-                                <Text style={attendancePagesStyle.classSelectorName} numberOfLines={1}>
-                                    {activeClass
-                                        ? `${activeClass.name}${activeClass.section ? ` • ${activeClass.section}` : ""}`
-                                        : "Select a Class..."}
+                            {classSearchQuery.length > 0 && (
+                                <Pressable
+                                    onPress={() => setClassSearchQuery("")}
+                                    style={attendancePagesStyle.filterClearButton}
+                                    hitSlop={8}
+                                >
+                                    <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                                </Pressable>
+                            )}
+                        </View>
+
+                        {isLoadingClasses ? (
+                            <View style={{ paddingVertical: 40, alignItems: "center" }}>
+                                <ActivityIndicator size="large" color="#4F46E5" />
+                                <Text style={{ color: "#64748B", marginTop: 10, fontSize: 14 }}>
+                                    Loading classes...
                                 </Text>
                             </View>
-                        </View>
-                        <Ionicons name="chevron-down" size={18} color="#64748B" />
-                    </Pressable>
-                )}
+                        ) : filteredClasses.length === 0 ? (
+                            <View style={attendancePagesStyle.noClassesCard}>
+                                <Ionicons name="school-outline" size={48} color="#94A3B8" />
+                                <Text style={[attendancePagesStyle.emptyText, { marginTop: 12 }]}>
+                                    {classSearchQuery.trim()
+                                        ? `No classes matching "${classSearchQuery}"`
+                                        : "No Classes Created Yet"}
+                                </Text>
+                                <Text style={[attendancePagesStyle.emptySubtext, { textAlign: "center", marginHorizontal: 20 }]}>
+                                    {classSearchQuery.trim()
+                                        ? "Try searching with a different keyword."
+                                        : "Please create a class in My Class first before taking attendance."}
+                                </Text>
+                                {!classSearchQuery.trim() && (
+                                    <Pressable
+                                        onPress={() => navigation.navigate("myclass", { username })}
+                                        style={[attendancePagesStyle.createButton, { marginTop: 16 }]}
+                                    >
+                                        <Ionicons name="school-outline" size={16} color="#FFFFFF" />
+                                        <Text style={attendancePagesStyle.createButtonText}>Go to My Classes</Text>
+                                    </Pressable>
+                                )}
+                            </View>
+                        ) : (
+                            <View style={attendancePagesStyle.classesGrid}>
+                                {filteredClasses.map((item) => {
+                                    const accentColor = item.color || "#4F46E5";
+                                    return (
+                                        <Pressable
+                                            key={item.id}
+                                            onPress={() => setSelectedClassId(item.id)}
+                                            style={({ pressed }) => [
+                                                attendancePagesStyle.classCard,
+                                                pressed && attendancePagesStyle.classCardPressed,
+                                            ]}
+                                        >
+                                            <View
+                                                style={[
+                                                    attendancePagesStyle.classCardColorBar,
+                                                    { backgroundColor: accentColor },
+                                                ]}
+                                            />
+                                            <View style={attendancePagesStyle.classCardBody}>
+                                                <View style={attendancePagesStyle.classCardTopRow}>
+                                                    <View style={attendancePagesStyle.classCardTitleBlock}>
+                                                        <Text style={attendancePagesStyle.classCardName} numberOfLines={1}>
+                                                            {item.name}
+                                                        </Text>
+                                                        {item.subject ? (
+                                                            <Text style={attendancePagesStyle.classCardSubject} numberOfLines={1}>
+                                                                {item.subject}
+                                                            </Text>
+                                                        ) : null}
+                                                    </View>
+                                                    {item.section ? (
+                                                        <View
+                                                            style={[
+                                                                attendancePagesStyle.classCardSectionBadge,
+                                                                { backgroundColor: `${accentColor}1A` },
+                                                            ]}
+                                                        >
+                                                            <Text style={[attendancePagesStyle.classCardSectionText, { color: accentColor }]}>
+                                                                {item.section}
+                                                            </Text>
+                                                        </View>
+                                                    ) : null}
+                                                </View>
 
-                {/* If No Classes Created Yet */}
-                {!isLoadingClasses && classes.length === 0 ? (
-                    <View style={attendancePagesStyle.noClassesCard}>
-                        <Ionicons name="school-outline" size={48} color="#94A3B8" />
-                        <Text style={[attendancePagesStyle.emptyText, { marginTop: 12 }]}>
-                            No Classes Created Yet
-                        </Text>
-                        <Text style={[attendancePagesStyle.emptySubtext, { textAlign: "center", marginHorizontal: 20 }]}>
-                            Please create a class in My Class first before taking attendance.
-                        </Text>
-                        <Pressable
-                            onPress={() => navigation.navigate("myclass", { username })}
-                            style={[attendancePagesStyle.createButton, { marginTop: 16 }]}
-                        >
-                            <Ionicons name="school-outline" size={16} color="#FFFFFF" />
-                            <Text style={attendancePagesStyle.createButtonText}>Go to My Classes</Text>
-                        </Pressable>
-                    </View>
+                                                {(item.room || item.schedule) ? (
+                                                    <View style={attendancePagesStyle.classCardDetailsRow}>
+                                                        {item.room ? (
+                                                            <View style={attendancePagesStyle.classCardDetailItem}>
+                                                                <Ionicons name="location-outline" size={13} color="#64748B" />
+                                                                <Text style={attendancePagesStyle.classCardDetailText}>
+                                                                    {item.room}
+                                                                </Text>
+                                                            </View>
+                                                        ) : null}
+                                                        {item.schedule ? (
+                                                            <View style={attendancePagesStyle.classCardDetailItem}>
+                                                                <Ionicons name="time-outline" size={13} color="#64748B" />
+                                                                <Text style={attendancePagesStyle.classCardDetailText}>
+                                                                    {item.schedule}
+                                                                </Text>
+                                                            </View>
+                                                        ) : null}
+                                                    </View>
+                                                ) : null}
+
+                                                <View style={attendancePagesStyle.classCardFooter}>
+                                                    <View style={attendancePagesStyle.classCardStudentCountBadge}>
+                                                        <Ionicons name="people" size={15} color="#475569" />
+                                                        <Text style={attendancePagesStyle.classCardStudentCountText}>
+                                                            {item.studentCount || 0} Student{item.studentCount === 1 ? "" : "s"}
+                                                        </Text>
+                                                    </View>
+
+                                                    <View
+                                                        style={[
+                                                            attendancePagesStyle.classCardOpenBadge,
+                                                            { backgroundColor: `${accentColor}15` },
+                                                        ]}
+                                                    >
+                                                        <Text style={[attendancePagesStyle.classCardOpenText, { color: accentColor }]}>
+                                                            Take Attendance
+                                                        </Text>
+                                                        <Ionicons name="chevron-forward" size={14} color={accentColor} />
+                                                    </View>
+                                                </View>
+                                            </View>
+                                        </Pressable>
+                                    );
+                                })}
+                            </View>
+                        )}
+                    </>
                 ) : (
+                    /* =========================================================================
+                       VIEW 2: SHOW CLASS ATTENDANCE DETAILS & SPREADSHEET
+                       ========================================================================= */
                     <>
+                        {/* Class Header Card with Back to All Classes button */}
+                        <View style={attendancePagesStyle.classDetailHeaderCard}>
+                            <View style={attendancePagesStyle.classDetailTopBar}>
+                                <Pressable
+                                    onPress={() => setSelectedClassId(null)}
+                                    style={attendancePagesStyle.backButton}
+                                    hitSlop={8}
+                                >
+                                    <Ionicons name="arrow-back" size={16} color="#4F46E5" />
+                                    <Text style={attendancePagesStyle.backButtonText}>All Classes</Text>
+                                </Pressable>
+
+                                <Pressable
+                                    onPress={handleOpenCreateModal}
+                                    style={({ pressed }) => [
+                                        attendancePagesStyle.createButton,
+                                        pressed && attendancePagesStyle.createButtonPressed,
+                                    ]}
+                                >
+                                    <Ionicons name="add-circle-outline" size={16} color="#FFFFFF" />
+                                    <Text style={attendancePagesStyle.createButtonText}>New Session</Text>
+                                </Pressable>
+                            </View>
+
+                            <Text style={attendancePagesStyle.classDetailTitle}>
+                                {activeClass.name}
+                            </Text>
+                            {activeClass.subject ? (
+                                <Text style={attendancePagesStyle.classDetailSubtitle}>
+                                    {activeClass.subject}
+                                </Text>
+                            ) : null}
+
+                            <View style={attendancePagesStyle.classDetailMetaRow}>
+                                {activeClass.section ? (
+                                    <View style={attendancePagesStyle.classDetailMetaBadge}>
+                                        <Ionicons name="bookmark-outline" size={13} color="#475569" />
+                                        <Text style={attendancePagesStyle.classDetailMetaBadgeText}>
+                                            Section: {activeClass.section}
+                                        </Text>
+                                    </View>
+                                ) : null}
+                                {activeClass.room ? (
+                                    <View style={attendancePagesStyle.classDetailMetaBadge}>
+                                        <Ionicons name="location-outline" size={13} color="#475569" />
+                                        <Text style={attendancePagesStyle.classDetailMetaBadgeText}>
+                                            {activeClass.room}
+                                        </Text>
+                                    </View>
+                                ) : null}
+                                {activeClass.schedule ? (
+                                    <View style={attendancePagesStyle.classDetailMetaBadge}>
+                                        <Ionicons name="time-outline" size={13} color="#475569" />
+                                        <Text style={attendancePagesStyle.classDetailMetaBadgeText}>
+                                            {activeClass.schedule}
+                                        </Text>
+                                    </View>
+                                ) : null}
+                                <View style={attendancePagesStyle.classDetailMetaBadge}>
+                                    <Ionicons name="people" size={13} color="#4F46E5" />
+                                    <Text style={[attendancePagesStyle.classDetailMetaBadgeText, { color: "#4F46E5", fontWeight: "700" }]}>
+                                        {students.length} Enrolled
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+
                         {/* Stats Summary */}
                         <View style={attendancePagesStyle.statsRow}>
                     <View style={attendancePagesStyle.statCard}>
@@ -864,67 +1037,6 @@ export function AttendancePages() {
                 </>
                 )}
             </ScrollView>
-
-            {/* Class Picker Modal */}
-            <Modal
-                visible={isClassPickerOpen}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setIsClassPickerOpen(false)}
-            >
-                <View style={attendancePagesStyle.modalOverlay}>
-                    <View style={attendancePagesStyle.modalContent}>
-                        <View style={attendancePagesStyle.modalHeader}>
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                                <Ionicons name="school-outline" size={22} color="#4F46E5" />
-                                <Text style={attendancePagesStyle.modalTitle}>Select Class</Text>
-                            </View>
-                            <Pressable onPress={() => setIsClassPickerOpen(false)} hitSlop={8}>
-                                <Ionicons name="close" size={22} color="#64748B" />
-                            </Pressable>
-                        </View>
-
-                        <Text style={attendancePagesStyle.datePickerSubtitle}>
-                            Choose which class attendance to view & record:
-                        </Text>
-
-                        <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
-                            {classes.map((cls) => {
-                                const isSelected = selectedClassId === cls.id;
-                                const accent = cls.color || "#4F46E5";
-                                return (
-                                    <Pressable
-                                        key={cls.id}
-                                        onPress={() => {
-                                            setSelectedClassId(cls.id);
-                                            setIsClassPickerOpen(false);
-                                        }}
-                                        style={[
-                                            attendancePagesStyle.classPickerOption,
-                                            isSelected && attendancePagesStyle.classPickerOptionSelected,
-                                        ]}
-                                    >
-                                        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
-                                            <View style={[attendancePagesStyle.classSelectorDot, { backgroundColor: accent }]} />
-                                            <View style={{ flex: 1 }}>
-                                                <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>
-                                                    {cls.name}
-                                                </Text>
-                                                <Text style={{ fontSize: 12, color: "#64748B", marginTop: 1 }}>
-                                                    {cls.section ? `${cls.section} • ` : ""}{cls.studentCount || 0} students
-                                                </Text>
-                                            </View>
-                                        </View>
-                                        {isSelected && (
-                                            <Ionicons name="checkmark-circle" size={20} color="#4F46E5" />
-                                        )}
-                                    </Pressable>
-                                );
-                            })}
-                        </ScrollView>
-                    </View>
-                </View>
-            </Modal>
 
             {/* Select Specific Date Modal */}
             <Modal

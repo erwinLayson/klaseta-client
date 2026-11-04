@@ -87,7 +87,7 @@ export function GradebookPages() {
     // Class selection state
     const [classes, setClasses] = useState<ClassItem[]>([]);
     const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
-    const [isClassPickerOpen, setIsClassPickerOpen] = useState(false);
+    const [classSearchQuery, setClassSearchQuery] = useState("");
     const [isLoadingClasses, setIsLoadingClasses] = useState(true);
 
     const [students, setStudents] = useState<Student[]>([]);
@@ -169,6 +169,18 @@ export function GradebookPages() {
         return classes.find((c) => c.id === selectedClassId) || null;
     }, [classes, selectedClassId]);
 
+    // Filter classes for the cards view
+    const filteredClasses = useMemo(() => {
+        if (!classSearchQuery.trim()) return classes;
+        const q = classSearchQuery.trim().toLowerCase();
+        return classes.filter((c) => {
+            const name = c.name.toLowerCase();
+            const sec = (c.section || "").toLowerCase();
+            const sub = (c.subject || "").toLowerCase();
+            return name.includes(q) || sec.includes(q) || sub.includes(q);
+        });
+    }, [classes, classSearchQuery]);
+
     // Load classes
     useEffect(() => {
         let isMounted = true;
@@ -179,11 +191,9 @@ export function GradebookPages() {
                 if (!isMounted) return;
                 setClasses(list);
 
-                let initialClassId = routeClassId;
-                if (!initialClassId && list.length > 0) {
-                    initialClassId = list[0].id;
+                if (routeClassId) {
+                    setSelectedClassId(routeClassId);
                 }
-                setSelectedClassId(initialClassId || null);
             } finally {
                 if (isMounted) setIsLoadingClasses(false);
             }
@@ -655,93 +665,258 @@ export function GradebookPages() {
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
             >
-                {/* Header */}
-                <View style={gradebookPagesStyle.header}>
-                    <View style={gradebookPagesStyle.headerTopRow}>
-                        <View style={gradebookPagesStyle.headerTitleRow}>
-                            <Ionicons name="book-outline" size={26} color="#4F46E5" />
-                            <Text style={gradebookPagesStyle.greeting}>Gradebook</Text>
+                {!selectedClassId || !activeClass ? (
+                    /* =========================================================================
+                       VIEW 1: SELECT CLASS IN CARD FORMAT
+                       ========================================================================= */
+                    <>
+                        <View style={gradebookPagesStyle.header}>
+                            <View style={gradebookPagesStyle.headerTopRow}>
+                                <View style={gradebookPagesStyle.headerTitleRow}>
+                                    <Ionicons name="book-outline" size={26} color="#4F46E5" />
+                                    <Text style={gradebookPagesStyle.greeting}>Class Gradebook</Text>
+                                </View>
+                            </View>
+                            <Text style={gradebookPagesStyle.subtitle}>
+                                Select a class card to view assessments, grading weights, and compute student grades
+                            </Text>
                         </View>
 
-                        <View style={gradebookPagesStyle.headerActionsRow}>
-                            <Pressable
-                                onPress={() => setIsWeightsModalOpen(true)}
-                                style={({ pressed }) => [
-                                    gradebookPagesStyle.weightsButton,
-                                    pressed && gradebookPagesStyle.weightsButtonPressed,
-                                ]}
-                            >
-                                <Ionicons name="pie-chart-outline" size={16} color="#4F46E5" />
-                                <Text style={gradebookPagesStyle.weightsButtonText}>
-                                    Weights ({totalWeightPercent}%)
-                                </Text>
-                            </Pressable>
-
-                            <Pressable
-                                onPress={handleOpenCreateAssessment}
-                                style={({ pressed }) => [
-                                    gradebookPagesStyle.createButton,
-                                    pressed && gradebookPagesStyle.createButtonPressed,
-                                ]}
-                            >
-                                <Ionicons name="add-circle-outline" size={16} color="#FFFFFF" />
-                                <Text style={gradebookPagesStyle.createButtonText}>
-                                    New Assessment
-                                </Text>
-                            </Pressable>
-                        </View>
-                    </View>
-                    <Text style={gradebookPagesStyle.subtitle}>
-                        Manage student assessments, grading weights, and scores spreadsheet
-                    </Text>
-                </View>
-
-                {/* Class Selector Bar */}
-                {classes.length > 0 && (
-                    <Pressable
-                        onPress={() => setIsClassPickerOpen(true)}
-                        style={gradebookPagesStyle.classSelectorBar}
-                    >
-                        <View style={gradebookPagesStyle.classSelectorLeft}>
-                            <View
-                                style={[
-                                    gradebookPagesStyle.classSelectorDot,
-                                    { backgroundColor: activeClass?.color || "#4F46E5" },
-                                ]}
+                        {/* Search Filter for Classes */}
+                        <View style={gradebookPagesStyle.filterContainer}>
+                            <Ionicons name="search-outline" size={18} color="#94A3B8" />
+                            <TextInput
+                                style={gradebookPagesStyle.filterInput}
+                                placeholder="Search classes by name, section, or subject..."
+                                placeholderTextColor="#94A3B8"
+                                value={classSearchQuery}
+                                onChangeText={setClassSearchQuery}
+                                autoCapitalize="none"
+                                autoCorrect={false}
                             />
-                            <View style={{ flex: 1 }}>
-                                <Text style={gradebookPagesStyle.classSelectorLabel}>Active Class</Text>
-                                <Text style={gradebookPagesStyle.classSelectorName} numberOfLines={1}>
-                                    {activeClass
-                                        ? `${activeClass.name}${activeClass.section ? ` • ${activeClass.section}` : ""}`
-                                        : "Select a Class..."}
+                            {classSearchQuery.length > 0 && (
+                                <Pressable
+                                    onPress={() => setClassSearchQuery("")}
+                                    style={gradebookPagesStyle.filterClearButton}
+                                    hitSlop={8}
+                                >
+                                    <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                                </Pressable>
+                            )}
+                        </View>
+
+                        {isLoadingClasses ? (
+                            <View style={{ paddingVertical: 40, alignItems: "center" }}>
+                                <ActivityIndicator size="large" color="#4F46E5" />
+                                <Text style={{ color: "#64748B", marginTop: 10, fontSize: 14 }}>
+                                    Loading classes...
                                 </Text>
                             </View>
-                        </View>
-                        <Ionicons name="chevron-down" size={18} color="#64748B" />
-                    </Pressable>
-                )}
+                        ) : filteredClasses.length === 0 ? (
+                            <View style={gradebookPagesStyle.noClassesCard}>
+                                <Ionicons name="school-outline" size={48} color="#94A3B8" />
+                                <Text style={[gradebookPagesStyle.emptyText, { marginTop: 12 }]}>
+                                    {classSearchQuery.trim()
+                                        ? `No classes matching "${classSearchQuery}"`
+                                        : "No Classes Created Yet"}
+                                </Text>
+                                <Text style={[gradebookPagesStyle.emptySubtext, { textAlign: "center", marginHorizontal: 20 }]}>
+                                    {classSearchQuery.trim()
+                                        ? "Try searching with a different keyword."
+                                        : "Please create a class in My Class first before managing gradebook."}
+                                </Text>
+                                {!classSearchQuery.trim() && (
+                                    <Pressable
+                                        onPress={() => navigation.navigate("myclass", { username })}
+                                        style={[gradebookPagesStyle.createButton, { marginTop: 16 }]}
+                                    >
+                                        <Ionicons name="school-outline" size={16} color="#FFFFFF" />
+                                        <Text style={gradebookPagesStyle.createButtonText}>Go to My Classes</Text>
+                                    </Pressable>
+                                )}
+                            </View>
+                        ) : (
+                            <View style={gradebookPagesStyle.classesGrid}>
+                                {filteredClasses.map((item) => {
+                                    const accentColor = item.color || "#4F46E5";
+                                    return (
+                                        <Pressable
+                                            key={item.id}
+                                            onPress={() => setSelectedClassId(item.id)}
+                                            style={({ pressed }) => [
+                                                gradebookPagesStyle.classCard,
+                                                pressed && gradebookPagesStyle.classCardPressed,
+                                            ]}
+                                        >
+                                            <View
+                                                style={[
+                                                    gradebookPagesStyle.classCardColorBar,
+                                                    { backgroundColor: accentColor },
+                                                ]}
+                                            />
+                                            <View style={gradebookPagesStyle.classCardBody}>
+                                                <View style={gradebookPagesStyle.classCardTopRow}>
+                                                    <View style={gradebookPagesStyle.classCardTitleBlock}>
+                                                        <Text style={gradebookPagesStyle.classCardName} numberOfLines={1}>
+                                                            {item.name}
+                                                        </Text>
+                                                        {item.subject ? (
+                                                            <Text style={gradebookPagesStyle.classCardSubject} numberOfLines={1}>
+                                                                {item.subject}
+                                                            </Text>
+                                                        ) : null}
+                                                    </View>
+                                                    {item.section ? (
+                                                        <View
+                                                            style={[
+                                                                gradebookPagesStyle.classCardSectionBadge,
+                                                                { backgroundColor: `${accentColor}1A` },
+                                                            ]}
+                                                        >
+                                                            <Text style={[gradebookPagesStyle.classCardSectionText, { color: accentColor }]}>
+                                                                {item.section}
+                                                            </Text>
+                                                        </View>
+                                                    ) : null}
+                                                </View>
 
-                {/* If No Classes Created Yet */}
-                {!isLoadingClasses && classes.length === 0 ? (
-                    <View style={gradebookPagesStyle.noClassesCard}>
-                        <Ionicons name="school-outline" size={48} color="#94A3B8" />
-                        <Text style={[gradebookPagesStyle.emptyText, { marginTop: 12 }]}>
-                            No Classes Created Yet
-                        </Text>
-                        <Text style={[gradebookPagesStyle.emptySubtext, { textAlign: "center", marginHorizontal: 20 }]}>
-                            Please create a class in My Class first before managing gradebook.
-                        </Text>
-                        <Pressable
-                            onPress={() => navigation.navigate("myclass", { username })}
-                            style={[gradebookPagesStyle.createButton, { marginTop: 16 }]}
-                        >
-                            <Ionicons name="school-outline" size={16} color="#FFFFFF" />
-                            <Text style={gradebookPagesStyle.createButtonText}>Go to My Classes</Text>
-                        </Pressable>
-                    </View>
+                                                {(item.room || item.schedule) ? (
+                                                    <View style={gradebookPagesStyle.classCardDetailsRow}>
+                                                        {item.room ? (
+                                                            <View style={gradebookPagesStyle.classCardDetailItem}>
+                                                                <Ionicons name="location-outline" size={13} color="#64748B" />
+                                                                <Text style={gradebookPagesStyle.classCardDetailText}>
+                                                                    {item.room}
+                                                                </Text>
+                                                            </View>
+                                                        ) : null}
+                                                        {item.schedule ? (
+                                                            <View style={gradebookPagesStyle.classCardDetailItem}>
+                                                                <Ionicons name="time-outline" size={13} color="#64748B" />
+                                                                <Text style={gradebookPagesStyle.classCardDetailText}>
+                                                                    {item.schedule}
+                                                                </Text>
+                                                            </View>
+                                                        ) : null}
+                                                    </View>
+                                                ) : null}
+
+                                                <View style={gradebookPagesStyle.classCardFooter}>
+                                                    <View style={gradebookPagesStyle.classCardStudentCountBadge}>
+                                                        <Ionicons name="people" size={15} color="#475569" />
+                                                        <Text style={gradebookPagesStyle.classCardStudentCountText}>
+                                                            {item.studentCount || 0} Student{item.studentCount === 1 ? "" : "s"}
+                                                        </Text>
+                                                    </View>
+
+                                                    <View
+                                                        style={[
+                                                            gradebookPagesStyle.classCardOpenBadge,
+                                                            { backgroundColor: `${accentColor}15` },
+                                                        ]}
+                                                    >
+                                                        <Text style={[gradebookPagesStyle.classCardOpenText, { color: accentColor }]}>
+                                                            Open Gradebook
+                                                        </Text>
+                                                        <Ionicons name="chevron-forward" size={14} color={accentColor} />
+                                                    </View>
+                                                </View>
+                                            </View>
+                                        </Pressable>
+                                    );
+                                })}
+                            </View>
+                        )}
+                    </>
                 ) : (
+                    /* =========================================================================
+                       VIEW 2: SHOW CLASS GRADEBOOK DETAILS & SPREADSHEET
+                       ========================================================================= */
                     <>
+                        {/* Class Header Card with Back to All Classes button & Actions */}
+                        <View style={gradebookPagesStyle.classDetailHeaderCard}>
+                            <View style={gradebookPagesStyle.classDetailTopBar}>
+                                <Pressable
+                                    onPress={() => setSelectedClassId(null)}
+                                    style={gradebookPagesStyle.backButton}
+                                    hitSlop={8}
+                                >
+                                    <Ionicons name="arrow-back" size={16} color="#4F46E5" />
+                                    <Text style={gradebookPagesStyle.backButtonText}>All Classes</Text>
+                                </Pressable>
+
+                                <View style={gradebookPagesStyle.headerActionsRow}>
+                                    <Pressable
+                                        onPress={() => setIsWeightsModalOpen(true)}
+                                        style={({ pressed }) => [
+                                            gradebookPagesStyle.weightsButton,
+                                            pressed && gradebookPagesStyle.weightsButtonPressed,
+                                        ]}
+                                    >
+                                        <Ionicons name="pie-chart-outline" size={15} color="#4F46E5" />
+                                        <Text style={gradebookPagesStyle.weightsButtonText}>
+                                            Weights ({totalWeightPercent}%)
+                                        </Text>
+                                    </Pressable>
+
+                                    <Pressable
+                                        onPress={handleOpenCreateAssessment}
+                                        style={({ pressed }) => [
+                                            gradebookPagesStyle.createButton,
+                                            pressed && gradebookPagesStyle.createButtonPressed,
+                                        ]}
+                                    >
+                                        <Ionicons name="add-circle-outline" size={15} color="#FFFFFF" />
+                                        <Text style={gradebookPagesStyle.createButtonText}>
+                                            New Assessment
+                                        </Text>
+                                    </Pressable>
+                                </View>
+                            </View>
+
+                            <Text style={gradebookPagesStyle.classDetailTitle}>
+                                {activeClass.name}
+                            </Text>
+                            {activeClass.subject ? (
+                                <Text style={gradebookPagesStyle.classDetailSubtitle}>
+                                    {activeClass.subject}
+                                </Text>
+                            ) : null}
+
+                            <View style={gradebookPagesStyle.classDetailMetaRow}>
+                                {activeClass.section ? (
+                                    <View style={gradebookPagesStyle.classDetailMetaBadge}>
+                                        <Ionicons name="bookmark-outline" size={13} color="#475569" />
+                                        <Text style={gradebookPagesStyle.classDetailMetaBadgeText}>
+                                            Section: {activeClass.section}
+                                        </Text>
+                                    </View>
+                                ) : null}
+                                {activeClass.room ? (
+                                    <View style={gradebookPagesStyle.classDetailMetaBadge}>
+                                        <Ionicons name="location-outline" size={13} color="#475569" />
+                                        <Text style={gradebookPagesStyle.classDetailMetaBadgeText}>
+                                            {activeClass.room}
+                                        </Text>
+                                    </View>
+                                ) : null}
+                                {activeClass.schedule ? (
+                                    <View style={gradebookPagesStyle.classDetailMetaBadge}>
+                                        <Ionicons name="time-outline" size={13} color="#475569" />
+                                        <Text style={gradebookPagesStyle.classDetailMetaBadgeText}>
+                                            {activeClass.schedule}
+                                        </Text>
+                                    </View>
+                                ) : null}
+                                <View style={gradebookPagesStyle.classDetailMetaBadge}>
+                                    <Ionicons name="people" size={13} color="#4F46E5" />
+                                    <Text style={[gradebookPagesStyle.classDetailMetaBadgeText, { color: "#4F46E5", fontWeight: "700" }]}>
+                                        {students.length} Enrolled
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+
                         {/* Stats Summary */}
                         <View style={gradebookPagesStyle.statsRow}>
                     <View style={gradebookPagesStyle.statCard}>
@@ -1336,67 +1511,6 @@ export function GradebookPages() {
                 </>
                 )}
             </ScrollView>
-
-            {/* Class Picker Modal */}
-            <Modal
-                visible={isClassPickerOpen}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setIsClassPickerOpen(false)}
-            >
-                <View style={gradebookPagesStyle.modalOverlay}>
-                    <View style={gradebookPagesStyle.modalContent}>
-                        <View style={gradebookPagesStyle.modalHeader}>
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                                <Ionicons name="school-outline" size={22} color="#4F46E5" />
-                                <Text style={gradebookPagesStyle.modalTitle}>Select Class</Text>
-                            </View>
-                            <Pressable onPress={() => setIsClassPickerOpen(false)} hitSlop={8}>
-                                <Ionicons name="close" size={22} color="#64748B" />
-                            </Pressable>
-                        </View>
-
-                        <Text style={gradebookPagesStyle.datePickerSubtitle}>
-                            Choose which class gradebook to view & manage:
-                        </Text>
-
-                        <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
-                            {classes.map((cls) => {
-                                const isSelected = selectedClassId === cls.id;
-                                const accent = cls.color || "#4F46E5";
-                                return (
-                                    <Pressable
-                                        key={cls.id}
-                                        onPress={() => {
-                                            setSelectedClassId(cls.id);
-                                            setIsClassPickerOpen(false);
-                                        }}
-                                        style={[
-                                            gradebookPagesStyle.classPickerOption,
-                                            isSelected && gradebookPagesStyle.classPickerOptionSelected,
-                                        ]}
-                                    >
-                                        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
-                                            <View style={[gradebookPagesStyle.classSelectorDot, { backgroundColor: accent }]} />
-                                            <View style={{ flex: 1 }}>
-                                                <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>
-                                                    {cls.name}
-                                                </Text>
-                                                <Text style={{ fontSize: 12, color: "#64748B", marginTop: 1 }}>
-                                                    {cls.section ? `${cls.section} • ` : ""}{cls.studentCount || 0} students
-                                                </Text>
-                                            </View>
-                                        </View>
-                                        {isSelected && (
-                                            <Ionicons name="checkmark-circle" size={20} color="#4F46E5" />
-                                        )}
-                                    </Pressable>
-                                );
-                            })}
-                        </ScrollView>
-                    </View>
-                </View>
-            </Modal>
 
             {/* Create / Edit Assessment Modal */}
             <Modal
