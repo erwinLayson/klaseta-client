@@ -237,14 +237,21 @@ export const styles = StyleSheet.create({
         elevation: 1,
     },
     filterSelectWrapperActive: {
-        borderColor: "#C7D2FE",
-        backgroundColor: "#EEF2FF",
+        borderColor: "#6EE7B7",
+        backgroundColor: "#ECFDF5",
+    },
+    filterSelectWrapperPressed: {
+        backgroundColor: "#F1F5F9",
     },
     filterSelectLeft: {
         flexDirection: "row",
         alignItems: "center",
         gap: 8,
         flex: 1,
+    },
+    filterSelectRight: {
+        flexDirection: "row",
+        alignItems: "center",
     },
     filterSelectValue: {
         fontSize: 13,
@@ -881,6 +888,54 @@ export const styles = StyleSheet.create({
         color: "#FFFFFF",
         fontSize: 14,
         fontWeight: "700",
+    },
+    datePickerSubtitle: {
+        fontSize: 13,
+        color: "#64748B",
+        marginBottom: 12,
+    },
+    dateOptionItem: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        borderRadius: 14,
+        marginBottom: 8,
+        backgroundColor: "#F8FAFC",
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+    },
+    dateOptionItemSelected: {
+        backgroundColor: "#ECFDF5",
+        borderColor: "#6EE7B7",
+    },
+    dateOptionItemPressed: {
+        backgroundColor: "#E2E8F0",
+    },
+    dateOptionLeft: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        flex: 1,
+    },
+    dateOptionIconBox: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: "#F1F5F9",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    dateOptionTitle: {
+        fontSize: 14,
+        fontWeight: "600",
+        color: "#1E293B",
+    },
+    dateOptionSub: {
+        fontSize: 12,
+        color: "#64748B",
+        marginTop: 2,
     },
 });
 

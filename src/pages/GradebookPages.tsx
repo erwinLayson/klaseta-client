@@ -64,6 +64,19 @@ function formatDateHeader(dateStr: string): string {
     }
 }
 
+function formatFullDate(dateStr: string): string {
+    try {
+        const parts = dateStr.split("-");
+        if (parts.length === 3) {
+            const date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+            return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+        }
+        return dateStr;
+    } catch {
+        return dateStr;
+    }
+}
+
 export function GradebookPages() {
     const navigation = useNavigation<NativeStackNavigationProp<RootParamList>>();
     const route = useRoute<RouteProp<RootParamList, "gradebook">>();
@@ -78,7 +91,8 @@ export function GradebookPages() {
 
     // Filters
     const [nameQuery, setNameQuery] = useState("");
-    const [selectedWeightId, setSelectedWeightId] = useState<number | null>(null);
+    const [selectedDate, setSelectedDate] = useState<string>("");
+    const [isDateSelectModalOpen, setIsDateSelectModalOpen] = useState(false);
 
     // Saving state
     const [isSaving, setIsSaving] = useState(false);
@@ -203,13 +217,20 @@ export function GradebookPages() {
         });
     }, [students, nameQuery]);
 
-    // Filter assessments by grading weight
+    // Unique dates from all assessments (newest first)
+    const uniqueAssessmentDates = useMemo(() => {
+        const dates = Array.from(new Set(assessments.map((a) => a.date)));
+        dates.sort((a, b) => b.localeCompare(a));
+        return dates;
+    }, [assessments]);
+
+    // Filter assessments by specific selected date
     const filteredAssessments = useMemo(() => {
-        if (selectedWeightId === null) {
+        if (!selectedDate) {
             return assessments;
         }
-        return assessments.filter((a) => a.weightId === selectedWeightId);
-    }, [assessments, selectedWeightId]);
+        return assessments.filter((a) => a.date === selectedDate);
+    }, [assessments, selectedDate]);
 
     // Total weights percentage
     const totalWeightPercent = useMemo(() => {
@@ -700,7 +721,7 @@ export function GradebookPages() {
                         </View>
                     </View>
 
-                    {/* Horizontal Flexbox Row: Search Filter, Filter by Weight Category, and Save All Button */}
+                    {/* Horizontal Flexbox Row: Search Filter, Filter by Date, and Save All Button */}
                     <View style={gradebookPagesStyle.controlsRow}>
                         {/* 1. Search Filter by Student Name */}
                         <View style={gradebookPagesStyle.filterInputWrapper}>
@@ -725,61 +746,48 @@ export function GradebookPages() {
                             )}
                         </View>
 
-                        {/* 2. Filter Assessments by Weight Category */}
+                        {/* 2. Filter Assessments by Specific Date */}
                         <Pressable
-                            onPress={() => {
-                                // Cycle or toggle weight category filter
-                                if (weights.length === 0) return;
-                                if (selectedWeightId === null) {
-                                    setSelectedWeightId(weights[0].id);
-                                } else {
-                                    const currentIndex = weights.findIndex((w) => w.id === selectedWeightId);
-                                    if (currentIndex >= 0 && currentIndex < weights.length - 1) {
-                                        setSelectedWeightId(weights[currentIndex + 1].id);
-                                    } else {
-                                        setSelectedWeightId(null);
-                                    }
-                                }
-                            }}
+                            onPress={() => setIsDateSelectModalOpen(true)}
                             style={({ pressed }) => [
                                 gradebookPagesStyle.filterSelectWrapper,
-                                selectedWeightId !== null && gradebookPagesStyle.filterSelectWrapperActive,
-                                pressed && { opacity: 0.85 },
+                                selectedDate !== "" && gradebookPagesStyle.filterSelectWrapperActive,
+                                pressed && gradebookPagesStyle.filterSelectWrapperPressed,
                             ]}
                         >
                             <View style={gradebookPagesStyle.filterSelectLeft}>
                                 <Ionicons
-                                    name="pie-chart-outline"
+                                    name={selectedDate ? "calendar" : "calendar-outline"}
                                     size={17}
-                                    color={selectedWeightId !== null ? "#4F46E5" : "#64748B"}
+                                    color={selectedDate ? "#059669" : "#64748B"}
                                 />
                                 <Text
                                     style={[
                                         gradebookPagesStyle.filterSelectValue,
-                                        selectedWeightId === null && gradebookPagesStyle.filterSelectPlaceholder,
+                                        !selectedDate && gradebookPagesStyle.filterSelectPlaceholder,
                                     ]}
                                     numberOfLines={1}
                                 >
-                                    {selectedWeightId !== null
-                                        ? weights.find((w) => w.id === selectedWeightId)?.name || "Category"
-                                        : "All Weights (Filter)"}
+                                    {selectedDate ? formatDateHeader(selectedDate) : "All Dates (Filter)"}
                                 </Text>
                             </View>
 
-                            {selectedWeightId !== null ? (
-                                <Pressable
-                                    onPress={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedWeightId(null);
-                                    }}
-                                    hitSlop={8}
-                                    style={gradebookPagesStyle.filterClearButton}
-                                >
-                                    <Ionicons name="close-circle" size={16} color="#94A3B8" />
-                                </Pressable>
-                            ) : (
-                                <Ionicons name="chevron-down" size={15} color="#64748B" />
-                            )}
+                            <View style={gradebookPagesStyle.filterSelectRight}>
+                                {selectedDate !== "" ? (
+                                    <Pressable
+                                        onPress={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedDate("");
+                                        }}
+                                        hitSlop={8}
+                                        style={gradebookPagesStyle.filterClearButton}
+                                    >
+                                        <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                                    </Pressable>
+                                ) : (
+                                    <Ionicons name="chevron-down" size={15} color="#64748B" />
+                                )}
+                            </View>
                         </Pressable>
 
                         {/* 3. Save All Button */}
@@ -877,23 +885,23 @@ export function GradebookPages() {
                     ) : filteredAssessments.length === 0 ? (
                         <View style={gradebookPagesStyle.emptyCard}>
                             <Ionicons
-                                name="pie-chart-outline"
+                                name="calendar-outline"
                                 size={36}
                                 color="#94A3B8"
                                 style={gradebookPagesStyle.emptyIcon}
                             />
                             <Text style={gradebookPagesStyle.emptyText}>
-                                No assessments under this category
+                                No assessments found for this date
                             </Text>
                             <Text style={gradebookPagesStyle.emptySubtext}>
-                                Clear the category filter to view all assessments.
+                                Clear the date filter to view all assessments.
                             </Text>
                             <Pressable
-                                onPress={() => setSelectedWeightId(null)}
+                                onPress={() => setSelectedDate("")}
                                 style={gradebookPagesStyle.clearFilterButton}
                             >
                                 <Text style={gradebookPagesStyle.clearFilterButtonText}>
-                                    Show All Categories
+                                    Show All Dates
                                 </Text>
                             </Pressable>
                         </View>
@@ -1656,6 +1664,136 @@ export function GradebookPages() {
                                 </ScrollView>
                             );
                         })()}
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Date Select Filter Modal */}
+            <Modal
+                visible={isDateSelectModalOpen}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setIsDateSelectModalOpen(false)}
+            >
+                <View style={gradebookPagesStyle.modalOverlay}>
+                    <View style={gradebookPagesStyle.modalContent}>
+                        <View style={gradebookPagesStyle.modalHeader}>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                                <Ionicons name="calendar-outline" size={22} color="#059669" />
+                                <Text style={gradebookPagesStyle.modalTitle}>Filter by Date</Text>
+                            </View>
+                            <Pressable
+                                onPress={() => setIsDateSelectModalOpen(false)}
+                                hitSlop={8}
+                            >
+                                <Ionicons name="close" size={22} color="#64748B" />
+                            </Pressable>
+                        </View>
+
+                        <Text style={gradebookPagesStyle.datePickerSubtitle}>
+                            Choose a specific assessment date to view:
+                        </Text>
+
+                        <ScrollView
+                            style={{ maxHeight: 320 }}
+                            showsVerticalScrollIndicator={false}
+                        >
+                            {/* Option: All Dates */}
+                            <Pressable
+                                onPress={() => {
+                                    setSelectedDate("");
+                                    setIsDateSelectModalOpen(false);
+                                }}
+                                style={({ pressed }) => [
+                                    gradebookPagesStyle.dateOptionItem,
+                                    selectedDate === "" && gradebookPagesStyle.dateOptionItemSelected,
+                                    pressed && gradebookPagesStyle.dateOptionItemPressed,
+                                ]}
+                            >
+                                <View style={gradebookPagesStyle.dateOptionLeft}>
+                                    <View
+                                        style={[
+                                            gradebookPagesStyle.dateOptionIconBox,
+                                            selectedDate === "" && { backgroundColor: "#D1FAE5" },
+                                        ]}
+                                    >
+                                        <Ionicons
+                                            name="calendar-outline"
+                                            size={18}
+                                            color={selectedDate === "" ? "#059669" : "#64748B"}
+                                        />
+                                    </View>
+                                    <View>
+                                        <Text
+                                            style={[
+                                                gradebookPagesStyle.dateOptionTitle,
+                                                selectedDate === "" && { color: "#059669", fontWeight: "700" },
+                                            ]}
+                                        >
+                                            All Dates
+                                        </Text>
+                                        <Text style={gradebookPagesStyle.dateOptionSub}>
+                                            Display all {assessments.length} assessments
+                                        </Text>
+                                    </View>
+                                </View>
+                                {selectedDate === "" && (
+                                    <Ionicons name="checkmark-circle" size={20} color="#059669" />
+                                )}
+                            </Pressable>
+
+                            {/* Specific dates list */}
+                            {uniqueAssessmentDates.map((dateStr) => {
+                                const isSelected = selectedDate === dateStr;
+                                const assessmentCount = assessments.filter((a) => a.date === dateStr).length;
+
+                                return (
+                                    <Pressable
+                                        key={dateStr}
+                                        onPress={() => {
+                                            setSelectedDate(dateStr);
+                                            setIsDateSelectModalOpen(false);
+                                        }}
+                                        style={({ pressed }) => [
+                                            gradebookPagesStyle.dateOptionItem,
+                                            isSelected && gradebookPagesStyle.dateOptionItemSelected,
+                                            pressed && gradebookPagesStyle.dateOptionItemPressed,
+                                        ]}
+                                    >
+                                        <View style={gradebookPagesStyle.dateOptionLeft}>
+                                            <View
+                                                style={[
+                                                    gradebookPagesStyle.dateOptionIconBox,
+                                                    isSelected && { backgroundColor: "#D1FAE5" },
+                                                ]}
+                                            >
+                                                <Ionicons
+                                                    name="calendar"
+                                                    size={18}
+                                                    color={isSelected ? "#059669" : "#64748B"}
+                                                />
+                                            </View>
+                                            <View>
+                                                <Text
+                                                    style={[
+                                                        gradebookPagesStyle.dateOptionTitle,
+                                                        isSelected && { color: "#059669", fontWeight: "700" },
+                                                    ]}
+                                                >
+                                                    {formatFullDate(dateStr)}
+                                                </Text>
+                                                <Text style={gradebookPagesStyle.dateOptionSub}>
+                                                    {dateStr} • {assessmentCount} assessment{assessmentCount > 1 ? "s" : ""}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        {isSelected && (
+                                            <Ionicons name="checkmark-circle" size={20} color="#059669" />
+                                        )}
+                                    </Pressable>
+                                );
+                            })}
+                        </ScrollView>
                     </View>
                 </View>
             </Modal>
