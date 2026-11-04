@@ -1208,5 +1208,121 @@ export const styles = StyleSheet.create({
         fontWeight: "600",
         color: "#475569",
     },
+
+    // ---------------------------------------------------------------------------
+    // Kebab Menu & Action Popup
+    // ---------------------------------------------------------------------------
+    kebabButton: {
+        width: 38,
+        height: 38,
+        borderRadius: 12,
+        backgroundColor: "#F1F5F9",
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    kebabButtonPressed: {
+        backgroundColor: "#E2E8F0",
+        transform: [{ scale: 0.96 }],
+    },
+    kebabModalOverlay: {
+        flex: 1,
+        backgroundColor: "rgba(15, 23, 42, 0.45)",
+        justifyContent: "center",
+        alignItems: "center",
+        paddingHorizontal: 20,
+    },
+    kebabModalCard: {
+        width: "100%",
+        maxWidth: 380,
+        backgroundColor: "#FFFFFF",
+        borderRadius: 22,
+        padding: 20,
+        shadowColor: "#0F172A",
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.15,
+        shadowRadius: 24,
+        elevation: 8,
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+    },
+    kebabModalHeader: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 14,
+        paddingBottom: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: "#F1F5F9",
+    },
+    kebabModalTitle: {
+        fontSize: 16,
+        fontWeight: "700",
+        color: "#0F172A",
+        letterSpacing: -0.2,
+    },
+    kebabModalCloseBtn: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: "#F1F5F9",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    kebabActionOption: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        borderRadius: 14,
+        backgroundColor: "#F8FAFC",
+        borderWidth: 1,
+        borderColor: "#F1F5F9",
+    },
+    kebabActionOptionPressed: {
+        backgroundColor: "#EEF2FF",
+        borderColor: "#C7D2FE",
+    },
+    kebabActionIconWrap: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    kebabActionTextCol: {
+        flex: 1,
+    },
+    kebabActionTitleRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+    },
+    kebabActionTitle: {
+        fontSize: 14,
+        fontWeight: "700",
+        color: "#0F172A",
+    },
+    kebabActionBadge: {
+        backgroundColor: "#EEF2FF",
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    kebabActionBadgeText: {
+        fontSize: 11,
+        fontWeight: "700",
+        color: "#4F46E5",
+    },
+    kebabActionSubtitle: {
+        fontSize: 12,
+        color: "#64748B",
+        marginTop: 2,
+    },
+    kebabActionDivider: {
+        height: 8,
+    },
 });
 

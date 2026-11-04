@@ -120,6 +120,7 @@ export function GradebookPages() {
 
     // Grading Weights Modal
     const [isWeightsModalOpen, setIsWeightsModalOpen] = useState(false);
+    const [isKebabOpen, setIsKebabOpen] = useState(false);
     const [newWeightName, setNewWeightName] = useState("");
     const [newWeightPercent, setNewWeightPercent] = useState("");
     const [isSubmittingWeight, setIsSubmittingWeight] = useState(false);
@@ -845,33 +846,18 @@ export function GradebookPages() {
                                     <Text style={gradebookPagesStyle.backButtonText}>All Classes</Text>
                                 </Pressable>
 
-                                <View style={gradebookPagesStyle.headerActionsRow}>
-                                    <Pressable
-                                        onPress={() => setIsWeightsModalOpen(true)}
-                                        style={({ pressed }) => [
-                                            gradebookPagesStyle.weightsButton,
-                                            pressed && gradebookPagesStyle.weightsButtonPressed,
-                                        ]}
-                                    >
-                                        <Ionicons name="pie-chart-outline" size={15} color="#4F46E5" />
-                                        <Text style={gradebookPagesStyle.weightsButtonText}>
-                                            Weights ({totalWeightPercent}%)
-                                        </Text>
-                                    </Pressable>
-
-                                    <Pressable
-                                        onPress={handleOpenCreateAssessment}
-                                        style={({ pressed }) => [
-                                            gradebookPagesStyle.createButton,
-                                            pressed && gradebookPagesStyle.createButtonPressed,
-                                        ]}
-                                    >
-                                        <Ionicons name="add-circle-outline" size={15} color="#FFFFFF" />
-                                        <Text style={gradebookPagesStyle.createButtonText}>
-                                            New Assessment
-                                        </Text>
-                                    </Pressable>
-                                </View>
+                                <Pressable
+                                    onPress={() => setIsKebabOpen(true)}
+                                    style={({ pressed }) => [
+                                        gradebookPagesStyle.kebabButton,
+                                        pressed && gradebookPagesStyle.kebabButtonPressed,
+                                    ]}
+                                    hitSlop={8}
+                                    accessibilityLabel="Class options menu"
+                                    accessibilityRole="button"
+                                >
+                                    <Ionicons name="ellipsis-vertical" size={20} color="#334155" />
+                                </Pressable>
                             </View>
 
                             <Text style={gradebookPagesStyle.classDetailTitle}>
@@ -2066,6 +2052,91 @@ export function GradebookPages() {
                         </ScrollView>
                     </View>
                 </View>
+            </Modal>
+
+            {/* Kebab Action Menu Modal */}
+            <Modal
+                visible={isKebabOpen}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setIsKebabOpen(false)}
+            >
+                <Pressable
+                    style={gradebookPagesStyle.kebabModalOverlay}
+                    onPress={() => setIsKebabOpen(false)}
+                >
+                    <Pressable
+                        style={gradebookPagesStyle.kebabModalCard}
+                        onPress={(e) => e.stopPropagation()}
+                    >
+                        <View style={gradebookPagesStyle.kebabModalHeader}>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                                <Ionicons name="options-outline" size={18} color="#4F46E5" />
+                                <Text style={gradebookPagesStyle.kebabModalTitle}>Gradebook Actions</Text>
+                            </View>
+                            <Pressable
+                                onPress={() => setIsKebabOpen(false)}
+                                hitSlop={8}
+                                style={gradebookPagesStyle.kebabModalCloseBtn}
+                            >
+                                <Ionicons name="close" size={16} color="#64748B" />
+                            </Pressable>
+                        </View>
+
+                        <Pressable
+                            onPress={() => {
+                                setIsKebabOpen(false);
+                                setIsWeightsModalOpen(true);
+                            }}
+                            style={({ pressed }) => [
+                                gradebookPagesStyle.kebabActionOption,
+                                pressed && gradebookPagesStyle.kebabActionOptionPressed,
+                            ]}
+                        >
+                            <View style={[gradebookPagesStyle.kebabActionIconWrap, { backgroundColor: "#EEF2FF" }]}>
+                                <Ionicons name="pie-chart" size={20} color="#4F46E5" />
+                            </View>
+                            <View style={gradebookPagesStyle.kebabActionTextCol}>
+                                <View style={gradebookPagesStyle.kebabActionTitleRow}>
+                                    <Text style={gradebookPagesStyle.kebabActionTitle}>Grading Weights</Text>
+                                    <View style={gradebookPagesStyle.kebabActionBadge}>
+                                        <Text style={gradebookPagesStyle.kebabActionBadgeText}>
+                                            {totalWeightPercent}%
+                                        </Text>
+                                    </View>
+                                </View>
+                                <Text style={gradebookPagesStyle.kebabActionSubtitle}>
+                                    Manage assessment categories & weights
+                                </Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+                        </Pressable>
+
+                        <View style={gradebookPagesStyle.kebabActionDivider} />
+
+                        <Pressable
+                            onPress={() => {
+                                setIsKebabOpen(false);
+                                handleOpenCreateAssessment();
+                            }}
+                            style={({ pressed }) => [
+                                gradebookPagesStyle.kebabActionOption,
+                                pressed && gradebookPagesStyle.kebabActionOptionPressed,
+                            ]}
+                        >
+                            <View style={[gradebookPagesStyle.kebabActionIconWrap, { backgroundColor: "#ECFDF5" }]}>
+                                <Ionicons name="add-circle" size={20} color="#059669" />
+                            </View>
+                            <View style={gradebookPagesStyle.kebabActionTextCol}>
+                                <Text style={gradebookPagesStyle.kebabActionTitle}>New Assessment</Text>
+                                <Text style={gradebookPagesStyle.kebabActionSubtitle}>
+                                    Create a test, quiz, or assignment
+                                </Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+                        </Pressable>
+                    </Pressable>
+                </Pressable>
             </Modal>
 
             <DialogMessage
