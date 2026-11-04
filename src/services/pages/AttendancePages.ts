@@ -27,6 +27,10 @@ export async function createAttendanceSession(
         return { success: false, message: "Date is required." };
     }
 
+    if (!classId || classId <= 0) {
+        return { success: false, message: "A valid class must be selected to create an attendance session." };
+    }
+
     try {
         const db = await getDatabase();
 
@@ -39,6 +43,16 @@ export async function createAttendanceSession(
             return { success: false, message: "Teacher account not found." };
         }
 
+        // Validate that class exists and belongs to this teacher
+        const classRecord = await db.getFirstAsync<{ id: number }>(
+            "SELECT id FROM classes WHERE id = ? AND teacherId = ?",
+            [classId, teacher.id]
+        );
+
+        if (!classRecord) {
+            return { success: false, message: "Selected class does not exist or does not belong to your account." };
+        }
+
         const sessionTitle = title?.trim() ? title.trim() : null;
 
         let newSessionId: number = 0;
@@ -46,24 +60,18 @@ export async function createAttendanceSession(
         await db.withTransactionAsync(async () => {
             const insertResult = await db.runAsync(
                 "INSERT INTO attendance_sessions (date, title, teacherId, classId) VALUES (?, ?, ?, ?)",
-                [date.trim(), sessionTitle, teacher.id, classId ?? null]
+                [date.trim(), sessionTitle, teacher.id, classId]
             );
 
             newSessionId = insertResult.lastInsertRowId;
 
-            // Fetch students to pre-populate:
-            // If classId is specified, fetch students enrolled in this class; otherwise all teacher students
-            const students = classId
-                ? await db.getAllAsync<{ id: number }>(
-                      `SELECT s.id FROM students s
-                       JOIN class_students cs ON cs.studentId = s.id
-                       WHERE cs.classId = ?`,
-                      [classId]
-                  )
-                : await db.getAllAsync<{ id: number }>(
-                      "SELECT id FROM students WHERE teacherId = ?",
-                      [teacher.id]
-                  );
+            // Fetch only students enrolled in this specific class
+            const students = await db.getAllAsync<{ id: number }>(
+                `SELECT s.id FROM students s
+                 JOIN class_students cs ON cs.studentId = s.id
+                 WHERE cs.classId = ?`,
+                [classId]
+            );
 
             // Pre-populate each student as "1" (present) by default
             for (const student of students) {
@@ -117,7 +125,7 @@ export async function getAttendanceSpreadsheet(
         const sessions = classId
             ? await db.getAllAsync<AttendanceSession>(
                   `SELECT * FROM attendance_sessions 
-                   WHERE teacherId = ? AND (classId = ? OR classId IS NULL) 
+                   WHERE teacherId = ? AND classId = ? 
                    ORDER BY date DESC, id DESC`,
                   [teacher.id, classId]
               )
@@ -126,12 +134,19 @@ export async function getAttendanceSpreadsheet(
                   [teacher.id]
               );
 
-        const records = await db.getAllAsync<AttendanceRecord>(
-            `SELECT ar.* FROM attendance_records ar
-             JOIN attendance_sessions s ON ar.sessionId = s.id
-             WHERE s.teacherId = ?`,
-            [teacher.id]
-        );
+        const records = classId
+            ? await db.getAllAsync<AttendanceRecord>(
+                  `SELECT ar.* FROM attendance_records ar
+                   JOIN attendance_sessions s ON ar.sessionId = s.id
+                   WHERE s.teacherId = ? AND s.classId = ?`,
+                  [teacher.id, classId]
+              )
+            : await db.getAllAsync<AttendanceRecord>(
+                  `SELECT ar.* FROM attendance_records ar
+                   JOIN attendance_sessions s ON ar.sessionId = s.id
+                   WHERE s.teacherId = ?`,
+                  [teacher.id]
+              );
 
         const recordsMap: Record<string, "1" | "0"> = {};
         for (const r of records) {
@@ -149,10 +164,71 @@ export async function getAttendanceSpreadsheet(
     }
 }
 
-export async function saveAllAttendanceRecords(
-    records: { sessionId: number; studentId: number; status: "1" | "0" }[]
+export async function updateAttendanceSession(
+    sessionId: number,
+    date: string,
+    title?: string
+): Promise<{ success: boolean; message: string }> {
+    if (!date?.trim()) {
+        return { success: false, message: "Date is required." };
+    }
+
+    try {
+        const db = await getDatabase();
+        const sessionTitle = title?.trim() ? title.trim() : null;
+
+        await db.runAsync(
+            "UPDATE attendance_sessions SET date = ?, title = ? WHERE id = ?",
+            [date.trim(), sessionTitle, sessionId]
+        );
+
+        return { success: true, message: "Attendance session updated successfully." };
+    } catch (error) {
+        console.error("Error updating attendance session:", error);
+        return { success: false, message: "Failed to update attendance session." };
+    }
+}
+
+export async function deleteAttendanceSession(
+    sessionId: number
+): Promise<{ success: boolean; message: string }> {
+    try {
+        const db = await getDatabase();
+
+        await db.withTransactionAsync(async () => {
+            await db.runAsync("DELETE FROM attendance_records WHERE sessionId = ?", [sessionId]);
+            await db.runAsync("DELETE FROM attendance_sessions WHERE id = ?", [sessionId]);
+        });
+
+        return { success: true, message: "Attendance session deleted successfully." };
+    } catch (error) {
+        console.error("Error deleting attendance session:", error);
+        return { success: false, message: "Failed to delete attendance session." };
+    }
+}
+
+export async function deleteAttendanceRecord(
+    sessionId: number,
+    studentId: number
 ): Promise<boolean> {
-    if (records.length === 0) return true;
+    try {
+        const db = await getDatabase();
+        await db.runAsync(
+            "DELETE FROM attendance_records WHERE sessionId = ? AND studentId = ?",
+            [sessionId, studentId]
+        );
+        return true;
+    } catch (error) {
+        console.error("Error deleting attendance record:", error);
+        return false;
+    }
+}
+
+export async function saveAllAttendanceRecords(
+    records: { sessionId: number; studentId: number; status: "1" | "0" }[],
+    deletedKeys?: { sessionId: number; studentId: number }[]
+): Promise<boolean> {
+    if (records.length === 0 && (!deletedKeys || deletedKeys.length === 0)) return true;
 
     try {
         const db = await getDatabase();
@@ -165,6 +241,15 @@ export async function saveAllAttendanceRecords(
                      ON CONFLICT(sessionId, studentId) DO UPDATE SET status = excluded.status`,
                     [r.sessionId, r.studentId, r.status]
                 );
+            }
+
+            if (deletedKeys && deletedKeys.length > 0) {
+                for (const d of deletedKeys) {
+                    await db.runAsync(
+                        "DELETE FROM attendance_records WHERE sessionId = ? AND studentId = ?",
+                        [d.sessionId, d.studentId]
+                    );
+                }
             }
         });
 

@@ -1,4 +1,5 @@
 export type RootParamList = {
+    landing: undefined;
     login: undefined;
     register: undefined;
     dashboard: { username: string };

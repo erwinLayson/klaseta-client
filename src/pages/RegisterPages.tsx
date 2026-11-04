@@ -10,6 +10,7 @@ import {
 import { useState } from "react";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { registerPagesStyle } from "../styles/index";
 import { RootParamList } from "../types/RootParamList";
 import { Button, InputGroup, DialogMessage } from "../components/index";
@@ -128,6 +129,19 @@ export function RegisterPages() {
                             <Text style={registerPagesStyle.FooterText}>Already have an account?</Text>
                             <Pressable onPress={() => navigation.navigate("login")} hitSlop={8}>
                                 <Text style={registerPagesStyle.FooterLink}>Sign in</Text>
+                            </Pressable>
+                        </View>
+
+                        <View style={[registerPagesStyle.Footer, { marginTop: 14 }]}>
+                            <Pressable
+                                onPress={() => navigation.navigate("landing")}
+                                hitSlop={8}
+                                style={{ flexDirection: "row", alignItems: "center", gap: 5 }}
+                            >
+                                <Ionicons name="arrow-back" size={14} color="#64748B" />
+                                <Text style={[registerPagesStyle.FooterText, { color: "#64748B" }]}>
+                                    Back to Home
+                                </Text>
                             </Pressable>
                         </View>
                     </View>

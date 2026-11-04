@@ -22,6 +22,8 @@ import type { ClassItem } from "../types/class";
 import { getClassesByTeacher } from "../services/pages/MyClassPages";
 import {
     createAttendanceSession,
+    updateAttendanceSession,
+    deleteAttendanceSession,
     getAttendanceSpreadsheet,
     saveAllAttendanceRecords,
 } from "../services/pages/AttendancePages";
@@ -97,6 +99,9 @@ export function AttendancePages() {
     const [isCreating, setIsCreating] = useState(false);
     const [sessionDate, setSessionDate] = useState(getTodayDateString());
     const [sessionTitle, setSessionTitle] = useState("");
+    const [editingSession, setEditingSession] = useState<AttendanceSession | null>(null);
+    const [deletingSession, setDeletingSession] = useState<AttendanceSession | null>(null);
+    const [isDeletingSession, setIsDeletingSession] = useState(false);
 
     const [dialog, setDialog] = useState({
         visible: false,
@@ -221,13 +226,31 @@ export function AttendancePages() {
     }, [sessions, selectedDate]);
 
     const handleOpenCreateModal = () => {
+        setEditingSession(null);
         setSessionDate(getTodayDateString());
         setSessionTitle("");
         setIsCreateModalOpen(true);
     };
 
+    const handleOpenEditModal = (session: AttendanceSession) => {
+        setEditingSession(session);
+        setSessionDate(session.date);
+        setSessionTitle(session.title || "");
+        setIsCreateModalOpen(true);
+    };
+
     const handleCreateSession = async () => {
         if (isCreating) return;
+
+        if (!selectedClassId) {
+            setDialog({
+                visible: true,
+                type: "error",
+                title: "Class Required",
+                message: "Please select a class before creating an attendance session.",
+            });
+            return;
+        }
 
         if (!sessionDate.trim()) {
             setDialog({
@@ -241,32 +264,87 @@ export function AttendancePages() {
 
         setIsCreating(true);
         try {
-            const result = await createAttendanceSession(
-                username,
-                sessionDate.trim(),
-                sessionTitle.trim() || undefined,
-                selectedClassId
-            );
+            if (editingSession) {
+                const result = await updateAttendanceSession(
+                    editingSession.id,
+                    sessionDate.trim(),
+                    sessionTitle.trim() || undefined
+                );
 
+                if (result.success) {
+                    setIsCreateModalOpen(false);
+                    setEditingSession(null);
+                    await loadSpreadsheetData();
+                    setDialog({
+                        visible: true,
+                        type: "success",
+                        title: "Session Updated",
+                        message: "Attendance session has been updated successfully.",
+                    });
+                } else {
+                    setDialog({
+                        visible: true,
+                        type: "error",
+                        title: "Update Failed",
+                        message: result.message,
+                    });
+                }
+            } else {
+                const result = await createAttendanceSession(
+                    username,
+                    sessionDate.trim(),
+                    sessionTitle.trim() || undefined,
+                    selectedClassId
+                );
+
+                if (result.success) {
+                    setIsCreateModalOpen(false);
+                    await loadSpreadsheetData();
+                    setDialog({
+                        visible: true,
+                        type: "success",
+                        title: "Session Created",
+                        message: `Daily attendance session for ${sessionDate} has been created.`,
+                    });
+                } else {
+                    setDialog({
+                        visible: true,
+                        type: "error",
+                        title: "Error",
+                        message: result.message,
+                    });
+                }
+            }
+        } finally {
+            setIsCreating(false);
+        }
+    };
+
+    const handleConfirmDeleteSession = async () => {
+        if (!deletingSession || isDeletingSession) return;
+
+        setIsDeletingSession(true);
+        try {
+            const result = await deleteAttendanceSession(deletingSession.id);
             if (result.success) {
-                setIsCreateModalOpen(false);
+                setDeletingSession(null);
                 await loadSpreadsheetData();
                 setDialog({
                     visible: true,
                     type: "success",
-                    title: "Session Created",
-                    message: `Daily attendance session for ${sessionDate} has been created.`,
+                    title: "Session Deleted",
+                    message: "Attendance session and its student records have been deleted.",
                 });
             } else {
                 setDialog({
                     visible: true,
                     type: "error",
-                    title: "Error",
+                    title: "Delete Failed",
                     message: result.message,
                 });
             }
         } finally {
-            setIsCreating(false);
+            setIsDeletingSession(false);
         }
     };
 
@@ -315,6 +393,7 @@ export function AttendancePages() {
                 studentId: number;
                 status: "1" | "0";
             }[] = [];
+            const deletedKeys: { sessionId: number; studentId: number }[] = [];
 
             for (const [key, status] of Object.entries(recordsMap)) {
                 const [studentIdStr, sessionIdStr] = key.split("_");
@@ -322,17 +401,23 @@ export function AttendancePages() {
                 const sessionId = Number(sessionIdStr);
 
                 if (!isNaN(studentId) && !isNaN(sessionId)) {
-                    const finalStatus: "1" | "0" = status === "0" ? "0" : "1";
-                    recordsToSave.push({ sessionId, studentId, status: finalStatus });
+                    if (status === "") {
+                        deletedKeys.push({ sessionId, studentId });
+                    } else {
+                        const finalStatus: "1" | "0" = status === "0" ? "0" : "1";
+                        recordsToSave.push({ sessionId, studentId, status: finalStatus });
+                    }
                 }
             }
 
-            const success = await saveAllAttendanceRecords(recordsToSave);
+            const success = await saveAllAttendanceRecords(recordsToSave, deletedKeys);
 
             if (success) {
                 const normalizedMap: Record<string, "1" | "0"> = {};
                 for (const [k, v] of Object.entries(recordsMap)) {
-                    normalizedMap[k] = v === "0" ? "0" : "1";
+                    if (v !== "") {
+                        normalizedMap[k] = v === "0" ? "0" : "1";
+                    }
                 }
                 setRecordsMap(normalizedMap);
                 setSavedRecordsMap(normalizedMap);
@@ -956,17 +1041,41 @@ export function AttendancePages() {
                                                     key={session.id}
                                                     style={attendancePagesStyle.dateHeaderCell}
                                                 >
-                                                    <Text style={attendancePagesStyle.dateHeaderText}>
-                                                        {formatDateHeader(session.date)}
-                                                    </Text>
-                                                    {session.title ? (
-                                                        <Text
-                                                            style={attendancePagesStyle.dateHeaderSubtext}
-                                                            numberOfLines={1}
-                                                        >
-                                                            {session.title}
+                                                    <View style={attendancePagesStyle.dateHeaderTopRow}>
+                                                        <Text style={attendancePagesStyle.dateHeaderText}>
+                                                            {formatDateHeader(session.date)}
                                                         </Text>
-                                                    ) : null}
+                                                        <View style={attendancePagesStyle.headerActionIcons}>
+                                                            <Pressable
+                                                                onPress={() => handleOpenEditModal(session)}
+                                                                style={({ pressed }) => [
+                                                                    attendancePagesStyle.actionIconBtn,
+                                                                    pressed && attendancePagesStyle.actionIconBtnPressed,
+                                                                ]}
+                                                                hitSlop={6}
+                                                                accessibilityLabel="Edit attendance session"
+                                                            >
+                                                                <Ionicons name="pencil" size={11} color="#4F46E5" />
+                                                            </Pressable>
+                                                            <Pressable
+                                                                onPress={() => setDeletingSession(session)}
+                                                                style={({ pressed }) => [
+                                                                    attendancePagesStyle.actionIconBtn,
+                                                                    pressed && attendancePagesStyle.actionIconBtnPressed,
+                                                                ]}
+                                                                hitSlop={6}
+                                                                accessibilityLabel="Delete attendance session"
+                                                            >
+                                                                <Ionicons name="trash-outline" size={11} color="#EF4444" />
+                                                            </Pressable>
+                                                        </View>
+                                                    </View>
+                                                    <Text
+                                                        style={attendancePagesStyle.dateHeaderSubtext}
+                                                        numberOfLines={1}
+                                                    >
+                                                        {session.title ? session.title : session.date}
+                                                    </Text>
                                                 </View>
                                             ))}
                                         </View>
@@ -1181,13 +1290,16 @@ export function AttendancePages() {
                 </Pressable>
             </Modal>
 
-            {/* Create Attendance Session Modal */}
+            {/* Create / Edit Attendance Session Modal */}
             <Modal
                 visible={isCreateModalOpen}
                 transparent
                 animationType="fade"
                 onRequestClose={() => {
-                    if (!isCreating) setIsCreateModalOpen(false);
+                    if (!isCreating) {
+                        setIsCreateModalOpen(false);
+                        setEditingSession(null);
+                    }
                 }}
             >
                 <KeyboardAvoidingView
@@ -1196,12 +1308,22 @@ export function AttendancePages() {
                 >
                     <View style={attendancePagesStyle.modalContent}>
                         <View style={attendancePagesStyle.modalHeader}>
-                            <Text style={attendancePagesStyle.modalTitle}>
-                                New Attendance Session
-                            </Text>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                                <Ionicons
+                                    name={editingSession ? "create-outline" : "calendar-outline"}
+                                    size={22}
+                                    color="#4F46E5"
+                                />
+                                <Text style={attendancePagesStyle.modalTitle}>
+                                    {editingSession ? "Edit Attendance Session" : "New Attendance Session"}
+                                </Text>
+                            </View>
                             <Pressable
                                 onPress={() => {
-                                    if (!isCreating) setIsCreateModalOpen(false);
+                                    if (!isCreating) {
+                                        setIsCreateModalOpen(false);
+                                        setEditingSession(null);
+                                    }
                                 }}
                                 hitSlop={8}
                             >
@@ -1235,13 +1357,24 @@ export function AttendancePages() {
                             />
 
                             <Button
-                                label={isCreating ? "Creating..." : "Create Session"}
+                                label={
+                                    isCreating
+                                        ? editingSession
+                                            ? "Updating..."
+                                            : "Creating..."
+                                        : editingSession
+                                        ? "Update Session"
+                                        : "Create Session"
+                                }
                                 onPress={handleCreateSession}
                             />
 
                             <Pressable
                                 onPress={() => {
-                                    if (!isCreating) setIsCreateModalOpen(false);
+                                    if (!isCreating) {
+                                        setIsCreateModalOpen(false);
+                                        setEditingSession(null);
+                                    }
                                 }}
                                 style={attendancePagesStyle.cancelButton}
                             >
@@ -1250,6 +1383,63 @@ export function AttendancePages() {
                         </ScrollView>
                     </View>
                 </KeyboardAvoidingView>
+            </Modal>
+
+            {/* Delete Attendance Session Confirmation Modal */}
+            <Modal
+                visible={deletingSession !== null}
+                transparent
+                animationType="fade"
+                onRequestClose={() => {
+                    if (!isDeletingSession) setDeletingSession(null);
+                }}
+            >
+                <View style={attendancePagesStyle.modalOverlay}>
+                    <View style={attendancePagesStyle.modalContent}>
+                        <View style={attendancePagesStyle.warningIconCircle}>
+                            <Ionicons name="trash-outline" size={30} color="#DC2626" />
+                        </View>
+                        <Text style={[attendancePagesStyle.modalTitle, { textAlign: "center" }]}>
+                            Delete Attendance Session?
+                        </Text>
+                        <Text style={attendancePagesStyle.deleteWarningText}>
+                            Are you sure you want to delete the attendance session for{" "}
+                            <Text style={{ fontWeight: "700", color: "#0F172A" }}>
+                                {deletingSession ? formatFullDate(deletingSession.date) : ""}
+                            </Text>
+                            {deletingSession?.title ? ` (${deletingSession.title})` : ""}?
+                            {"\n\n"}
+                            All student attendance records recorded for this session will be permanently deleted.
+                        </Text>
+
+                        <View style={attendancePagesStyle.modalActionsRow}>
+                            <Pressable
+                                disabled={isDeletingSession}
+                                onPress={() => setDeletingSession(null)}
+                                style={attendancePagesStyle.cancelButton}
+                            >
+                                <Text style={attendancePagesStyle.cancelButtonText}>Cancel</Text>
+                            </Pressable>
+
+                            <Pressable
+                                disabled={isDeletingSession}
+                                onPress={handleConfirmDeleteSession}
+                                style={({ pressed }) => [
+                                    attendancePagesStyle.dangerButton,
+                                    pressed && attendancePagesStyle.dangerButtonPressed,
+                                ]}
+                            >
+                                {isDeletingSession ? (
+                                    <ActivityIndicator size="small" color="#FFFFFF" />
+                                ) : (
+                                    <Text style={attendancePagesStyle.dangerButtonText}>
+                                        Delete Session
+                                    </Text>
+                                )}
+                            </Pressable>
+                        </View>
+                    </View>
+                </View>
             </Modal>
 
             <DialogMessage

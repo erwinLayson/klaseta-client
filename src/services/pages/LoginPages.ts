@@ -1,4 +1,4 @@
-import bcrypt from "bcryptjs";
+import { bcrypt } from "../auth/bcryptSetup";
 import { getDatabase } from "../database/connection";
 import type { UserCredentialProp } from "../../types/users";
 

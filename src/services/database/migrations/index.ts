@@ -5,6 +5,7 @@ import { alterStudentsTableNullable } from "./003_alter_students_table_nullable"
 import { createAttendanceTables } from "./004_create_attendance_tables";
 import { createGradebookTables } from "./005_create_gradebook_tables";
 import { createClassesTable } from "./006_create_classes_table";
+import { addAttendanceClassGuard } from "./007_add_attendance_class_guard";
 
 export const migrations: Migration[] = [
     createUsersTable,
@@ -13,4 +14,5 @@ export const migrations: Migration[] = [
     createAttendanceTables,
     createGradebookTables,
     createClassesTable,
+    addAttendanceClassGuard,
 ];

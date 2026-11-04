@@ -1,5 +1,6 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import {
+    LandingPages,
     LoginPages,
     RegisterPages,
     DashboardPages,
@@ -14,7 +15,8 @@ const Stack = createNativeStackNavigator<RootParamList>();
 
 export function RootParamNavigation() {
     return (
-        <Stack.Navigator>
+        <Stack.Navigator initialRouteName="landing">
+            <Stack.Screen name="landing" component={LandingPages} options={{ headerShown: false }} />
             <Stack.Screen name="login" component={LoginPages} options={{ headerShown: false }} />
             <Stack.Screen name="register" component={RegisterPages} options={{ headerShown: false }} />
             <Stack.Screen

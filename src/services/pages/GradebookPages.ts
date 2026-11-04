@@ -318,10 +318,10 @@ export async function getGradebookSpreadsheet(
             scoresMap[`${s.studentId}_${s.assessmentId}`] = String(s.score);
         }
 
-        // Fetch total attendance sessions for teacher & class
+        // Fetch total attendance sessions for teacher & class (strictly guarded to classId)
         const totalSessionsResult = classId
             ? await db.getFirstAsync<{ count: number }>(
-                  "SELECT COUNT(*) as count FROM attendance_sessions WHERE teacherId = ? AND (classId = ? OR classId IS NULL)",
+                  "SELECT COUNT(*) as count FROM attendance_sessions WHERE teacherId = ? AND classId = ?",
                   [teacher.id, classId]
               )
             : await db.getFirstAsync<{ count: number }>(
@@ -330,7 +330,7 @@ export async function getGradebookSpreadsheet(
               );
         const totalAttendanceSessions = totalSessionsResult?.count ?? 0;
 
-        // Fetch present count per student
+        // Fetch present count per student (strictly guarded to classId)
         const attendanceRows = classId
             ? await db.getAllAsync<{
                   studentId: number;
@@ -339,7 +339,7 @@ export async function getGradebookSpreadsheet(
                   `SELECT ar.studentId, COUNT(*) as presentCount
                    FROM attendance_records ar
                    JOIN attendance_sessions s ON ar.sessionId = s.id
-                   WHERE s.teacherId = ? AND (s.classId = ? OR s.classId IS NULL) AND (ar.status = '1' OR ar.status = 'present')
+                   WHERE s.teacherId = ? AND s.classId = ? AND (ar.status = '1' OR ar.status = 'present')
                    GROUP BY ar.studentId`,
                   [teacher.id, classId]
               )

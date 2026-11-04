@@ -1,4 +1,4 @@
-import bcrypt from "bcryptjs";
+import { bcrypt } from "../auth/bcryptSetup";
 import { getDatabase } from "../database/connection";
 import type { UserRegisterProp } from "../../types/users";
 
@@ -39,7 +39,7 @@ export async function handleRegister(form: UserRegisterProp): Promise<RegisterRe
             return { success: false, message: "An account with this email already exists." };
         }
 
-        const hashPassword = await bcrypt.hash(password, 10);
+        const hashPassword = await bcrypt.hash(password.toString(), 10);
 
         await db.runAsync(
             "INSERT INTO users (username, email, password) VALUES (?, ?, ?)",
