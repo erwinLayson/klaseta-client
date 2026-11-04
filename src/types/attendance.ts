@@ -5,6 +5,7 @@ export interface AttendanceSession {
     date: string;
     title: string | null;
     teacherId: number;
+    classId?: number | null;
     createdAt: string;
 }
 
@@ -18,4 +19,5 @@ export interface AttendanceRecord {
 export interface CreateSessionInput {
     date: string;
     title?: string;
+    classId?: number;
 }

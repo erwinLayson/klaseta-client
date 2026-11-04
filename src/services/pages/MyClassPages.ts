@@ -2,6 +2,7 @@ import * as XLSX from "xlsx";
 import * as FileSystem from "expo-file-system/legacy";
 import { getDatabase } from "../database/connection";
 import type { Student, AddStudentInput } from "../../types/student";
+import type { ClassItem, CreateClassInput, UpdateClassInput } from "../../types/class";
 
 export type StudentResult = {
     success: boolean;
@@ -302,5 +303,344 @@ export async function getStudentsByTeacher(username: string): Promise<Student[]>
     } catch (error) {
         console.error("Error fetching students:", error);
         return [];
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Class Management Services
+// ---------------------------------------------------------------------------
+
+export async function getClassesByTeacher(username: string): Promise<ClassItem[]> {
+    try {
+        const db = await getDatabase();
+        const teacher = await db.getFirstAsync<{ id: number }>(
+            "SELECT id FROM users WHERE username = ?",
+            [username.trim()]
+        );
+
+        if (!teacher) return [];
+
+        const classes = await db.getAllAsync<ClassItem>(
+            `SELECT c.*, 
+                (SELECT COUNT(*) FROM class_students cs WHERE cs.classId = c.id) AS studentCount
+             FROM classes c
+             WHERE c.teacherId = ?
+             ORDER BY c.id DESC`,
+            [teacher.id]
+        );
+
+        return classes ?? [];
+    } catch (error) {
+        console.error("Error fetching classes:", error);
+        return [];
+    }
+}
+
+export async function getClassById(classId: number): Promise<ClassItem | null> {
+    try {
+        const db = await getDatabase();
+        const row = await db.getFirstAsync<ClassItem>(
+            `SELECT c.*, 
+                (SELECT COUNT(*) FROM class_students cs WHERE cs.classId = c.id) AS studentCount
+             FROM classes c
+             WHERE c.id = ?`,
+            [classId]
+        );
+        return row ?? null;
+    } catch (error) {
+        console.error("Error fetching class by id:", error);
+        return null;
+    }
+}
+
+export async function createClass(
+    username: string,
+    input: CreateClassInput
+): Promise<{ success: boolean; message: string; classId?: number }> {
+    if (!input.name.trim()) {
+        return { success: false, message: "Class name is required." };
+    }
+
+    try {
+        const db = await getDatabase();
+        const teacher = await db.getFirstAsync<{ id: number }>(
+            "SELECT id FROM users WHERE username = ?",
+            [username.trim()]
+        );
+
+        if (!teacher) {
+            return { success: false, message: "Teacher account not found." };
+        }
+
+        const result = await db.runAsync(
+            `INSERT INTO classes (teacherId, name, section, subject, room, schedule, color)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [
+                teacher.id,
+                input.name.trim(),
+                input.section?.trim() || null,
+                input.subject?.trim() || null,
+                input.room?.trim() || null,
+                input.schedule?.trim() || null,
+                input.color?.trim() || "#4F46E5",
+            ]
+        );
+
+        return {
+            success: true,
+            message: "Class created successfully!",
+            classId: result.lastInsertRowId,
+        };
+    } catch (error) {
+        console.error("Error creating class:", error);
+        return { success: false, message: "Failed to create class. Please try again." };
+    }
+}
+
+export async function updateClass(
+    input: UpdateClassInput
+): Promise<{ success: boolean; message: string }> {
+    if (!input.name.trim()) {
+        return { success: false, message: "Class name is required." };
+    }
+
+    try {
+        const db = await getDatabase();
+        await db.runAsync(
+            `UPDATE classes
+             SET name = ?, section = ?, subject = ?, room = ?, schedule = ?, color = ?
+             WHERE id = ?`,
+            [
+                input.name.trim(),
+                input.section?.trim() || null,
+                input.subject?.trim() || null,
+                input.room?.trim() || null,
+                input.schedule?.trim() || null,
+                input.color?.trim() || "#4F46E5",
+                input.id,
+            ]
+        );
+
+        return { success: true, message: "Class updated successfully!" };
+    } catch (error) {
+        console.error("Error updating class:", error);
+        return { success: false, message: "Failed to update class." };
+    }
+}
+
+export async function deleteClass(
+    classId: number
+): Promise<{ success: boolean; message: string }> {
+    try {
+        const db = await getDatabase();
+        await db.runAsync("DELETE FROM classes WHERE id = ?", [classId]);
+        return { success: true, message: "Class deleted successfully." };
+    } catch (error) {
+        console.error("Error deleting class:", error);
+        return { success: false, message: "Failed to delete class." };
+    }
+}
+
+export async function getStudentsByClass(classId: number): Promise<Student[]> {
+    try {
+        const db = await getDatabase();
+        const students = await db.getAllAsync<Student>(
+            `SELECT s.* FROM students s
+             JOIN class_students cs ON cs.studentId = s.id
+             WHERE cs.classId = ?
+             ORDER BY s.lastname ASC, s.firstname ASC`,
+            [classId]
+        );
+        return students ?? [];
+    } catch (error) {
+        console.error("Error fetching students by class:", error);
+        return [];
+    }
+}
+
+export async function addStudentToClass(
+    username: string,
+    classId: number,
+    input: AddStudentInput
+): Promise<StudentResult> {
+    const { firstname, middlename, lastname, suffix } = input;
+
+    if (!firstname.trim() || !lastname.trim()) {
+        return { success: false, message: "First name and Last name are required." };
+    }
+
+    try {
+        const db = await getDatabase();
+        const teacher = await db.getFirstAsync<{ id: number }>(
+            "SELECT id FROM users WHERE username = ?",
+            [username.trim()]
+        );
+
+        if (!teacher) {
+            return { success: false, message: "Teacher account not found." };
+        }
+
+        const normalizedMiddlename = middlename?.trim() ? middlename.trim() : null;
+        const normalizedSuffix = normalizeSuffix(suffix);
+
+        await db.withTransactionAsync(async () => {
+            const insertStudentResult = await db.runAsync(
+                `INSERT INTO students (firstname, middlename, lastname, suffix, teacherId, classId)
+                 VALUES (?, ?, ?, ?, ?, ?)`,
+                [
+                    firstname.trim(),
+                    normalizedMiddlename,
+                    lastname.trim(),
+                    normalizedSuffix,
+                    teacher.id,
+                    classId,
+                ]
+            );
+
+            const newStudentId = insertStudentResult.lastInsertRowId;
+
+            await db.runAsync(
+                `INSERT OR IGNORE INTO class_students (classId, studentId) VALUES (?, ?)`,
+                [classId, newStudentId]
+            );
+
+            // If there are existing attendance sessions for this class, pre-populate record as '1'
+            const sessions = await db.getAllAsync<{ id: number }>(
+                "SELECT id FROM attendance_sessions WHERE classId = ?",
+                [classId]
+            );
+            for (const s of sessions) {
+                await db.runAsync(
+                    "INSERT OR IGNORE INTO attendance_records (sessionId, studentId, status) VALUES (?, ?, '1')",
+                    [s.id, newStudentId]
+                );
+            }
+        });
+
+        return { success: true, message: "Student added to class successfully!" };
+    } catch (error) {
+        console.error("Error adding student to class:", error);
+        return { success: false, message: "Failed to add student to class. Please try again." };
+    }
+}
+
+export async function addStudentsBulkToClass(
+    username: string,
+    classId: number,
+    studentsList: AddStudentInput[]
+): Promise<BulkUploadResult> {
+    if (studentsList.length === 0) {
+        return {
+            success: false,
+            message: "No valid student records provided.",
+            insertedCount: 0,
+            skippedCount: 0,
+        };
+    }
+
+    try {
+        const db = await getDatabase();
+        const teacher = await db.getFirstAsync<{ id: number }>(
+            "SELECT id FROM users WHERE username = ?",
+            [username.trim()]
+        );
+
+        if (!teacher) {
+            return {
+                success: false,
+                message: "Teacher account not found.",
+                insertedCount: 0,
+                skippedCount: 0,
+            };
+        }
+
+        let insertedCount = 0;
+        let skippedCount = 0;
+
+        await db.withTransactionAsync(async () => {
+            // Get sessions for this class to link records
+            const sessions = await db.getAllAsync<{ id: number }>(
+                "SELECT id FROM attendance_sessions WHERE classId = ?",
+                [classId]
+            );
+
+            for (const student of studentsList) {
+                if (!student.firstname?.trim() || !student.lastname?.trim()) {
+                    skippedCount++;
+                    continue;
+                }
+
+                const normalizedMiddlename = student.middlename?.trim()
+                    ? student.middlename.trim()
+                    : null;
+                const normalizedSuffix = normalizeSuffix(student.suffix);
+
+                const res = await db.runAsync(
+                    `INSERT INTO students (firstname, middlename, lastname, suffix, teacherId, classId)
+                     VALUES (?, ?, ?, ?, ?, ?)`,
+                    [
+                        student.firstname.trim(),
+                        normalizedMiddlename,
+                        student.lastname.trim(),
+                        normalizedSuffix,
+                        teacher.id,
+                        classId,
+                    ]
+                );
+
+                const newStudentId = res.lastInsertRowId;
+
+                await db.runAsync(
+                    `INSERT OR IGNORE INTO class_students (classId, studentId) VALUES (?, ?)`,
+                    [classId, newStudentId]
+                );
+
+                for (const s of sessions) {
+                    await db.runAsync(
+                        "INSERT OR IGNORE INTO attendance_records (sessionId, studentId, status) VALUES (?, ?, '1')",
+                        [s.id, newStudentId]
+                    );
+                }
+
+                insertedCount++;
+            }
+        });
+
+        return {
+            success: insertedCount > 0,
+            message:
+                insertedCount > 0
+                    ? `Successfully imported ${insertedCount} student${insertedCount > 1 ? "s" : ""} to this class!${
+                          skippedCount > 0 ? ` (${skippedCount} rows skipped due to missing name)` : ""
+                      }`
+                    : "No students were imported. Make sure each row includes a first and last name.",
+            insertedCount,
+            skippedCount,
+        };
+    } catch (error) {
+        console.error("Error bulk adding students to class:", error);
+        return {
+            success: false,
+            message: "Database error during bulk upload. Please try again.",
+            insertedCount: 0,
+            skippedCount: 0,
+        };
+    }
+}
+
+export async function removeStudentFromClass(
+    classId: number,
+    studentId: number
+): Promise<{ success: boolean; message: string }> {
+    try {
+        const db = await getDatabase();
+        await db.runAsync(
+            "DELETE FROM class_students WHERE classId = ? AND studentId = ?",
+            [classId, studentId]
+        );
+        return { success: true, message: "Student removed from class." };
+    } catch (error) {
+        console.error("Error removing student from class:", error);
+        return { success: false, message: "Failed to remove student from class." };
     }
 }

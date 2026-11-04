@@ -15,7 +15,10 @@ const DEFAULT_WEIGHTS = [
     { name: "Quarterly Assessment", weight: 20 },
 ];
 
-export async function getGradingWeights(username: string): Promise<GradingWeight[]> {
+export async function getGradingWeights(
+    username: string,
+    classId?: number | null
+): Promise<GradingWeight[]> {
     try {
         const db = await getDatabase();
         const teacher = await db.getFirstAsync<{ id: number }>(
@@ -25,26 +28,40 @@ export async function getGradingWeights(username: string): Promise<GradingWeight
 
         if (!teacher) return [];
 
-        let weights = await db.getAllAsync<GradingWeight>(
-            "SELECT * FROM grading_weights WHERE teacherId = ? ORDER BY id ASC",
-            [teacher.id]
-        );
+        let weights = classId
+            ? await db.getAllAsync<GradingWeight>(
+                  `SELECT * FROM grading_weights 
+                   WHERE teacherId = ? AND (classId = ? OR classId IS NULL) 
+                   ORDER BY id ASC`,
+                  [teacher.id, classId]
+              )
+            : await db.getAllAsync<GradingWeight>(
+                  "SELECT * FROM grading_weights WHERE teacherId = ? ORDER BY id ASC",
+                  [teacher.id]
+              );
 
         // Auto-seed default weights if none exist yet for this teacher
         if (!weights || weights.length === 0) {
             await db.withTransactionAsync(async () => {
                 for (const w of DEFAULT_WEIGHTS) {
                     await db.runAsync(
-                        "INSERT INTO grading_weights (teacherId, name, weight) VALUES (?, ?, ?)",
-                        [teacher.id, w.name, w.weight]
+                        "INSERT INTO grading_weights (teacherId, name, weight, classId) VALUES (?, ?, ?, ?)",
+                        [teacher.id, w.name, w.weight, classId ?? null]
                     );
                 }
             });
 
-            weights = await db.getAllAsync<GradingWeight>(
-                "SELECT * FROM grading_weights WHERE teacherId = ? ORDER BY id ASC",
-                [teacher.id]
-            );
+            weights = classId
+                ? await db.getAllAsync<GradingWeight>(
+                      `SELECT * FROM grading_weights 
+                       WHERE teacherId = ? AND (classId = ? OR classId IS NULL) 
+                       ORDER BY id ASC`,
+                      [teacher.id, classId]
+                  )
+                : await db.getAllAsync<GradingWeight>(
+                      "SELECT * FROM grading_weights WHERE teacherId = ? ORDER BY id ASC",
+                      [teacher.id]
+                  );
         }
 
         return weights ?? [];
@@ -57,7 +74,8 @@ export async function getGradingWeights(username: string): Promise<GradingWeight
 export async function createGradingWeight(
     username: string,
     name: string,
-    weight: number
+    weight: number,
+    classId?: number | null
 ): Promise<{ success: boolean; message: string; weightId?: number }> {
     if (!name.trim()) {
         return { success: false, message: "Weight category name is required." };
@@ -78,8 +96,8 @@ export async function createGradingWeight(
         }
 
         const result = await db.runAsync(
-            "INSERT INTO grading_weights (teacherId, name, weight) VALUES (?, ?, ?)",
-            [teacher.id, name.trim(), weight]
+            "INSERT INTO grading_weights (teacherId, name, weight, classId) VALUES (?, ?, ?, ?)",
+            [teacher.id, name.trim(), weight, classId ?? null]
         );
 
         return {
@@ -132,14 +150,15 @@ export async function createAssessment(
         }
 
         const result = await db.runAsync(
-            `INSERT INTO assessments (teacherId, weightId, title, maxScore, date)
-             VALUES (?, ?, ?, ?, ?)`,
+            `INSERT INTO assessments (teacherId, weightId, title, maxScore, date, classId)
+             VALUES (?, ?, ?, ?, ?, ?)`,
             [
                 teacher.id,
                 input.weightId ?? null,
                 input.title.trim(),
                 input.maxScore,
                 input.date.trim(),
+                input.classId ?? null,
             ]
         );
 
@@ -203,7 +222,8 @@ export async function deleteAssessment(
 }
 
 export async function getGradebookSpreadsheet(
-    username: string
+    username: string,
+    classId?: number | null
 ): Promise<GradebookSpreadsheetData> {
     try {
         const db = await getDatabase();
@@ -216,31 +236,58 @@ export async function getGradebookSpreadsheet(
             return { students: [], weights: [], assessments: [], scoresMap: {}, attendanceMap: {} };
         }
 
-        const students = await db.getAllAsync<Student>(
-            "SELECT * FROM students WHERE teacherId = ? ORDER BY lastname ASC, firstname ASC",
-            [teacher.id]
-        );
+        const students = classId
+            ? await db.getAllAsync<Student>(
+                  `SELECT s.* FROM students s
+                   JOIN class_students cs ON cs.studentId = s.id
+                   WHERE cs.classId = ?
+                   ORDER BY s.lastname ASC, s.firstname ASC`,
+                  [classId]
+              )
+            : await db.getAllAsync<Student>(
+                  "SELECT * FROM students WHERE teacherId = ? ORDER BY lastname ASC, firstname ASC",
+                  [teacher.id]
+              );
 
-        const weights = await getGradingWeights(username);
+        const weights = await getGradingWeights(username, classId);
 
-        const assessmentsRaw = await db.getAllAsync<{
-            id: number;
-            teacherId: number;
-            weightId: number | null;
-            weightName: string | null;
-            weightPercent: number | null;
-            title: string;
-            maxScore: number;
-            date: string;
-            createdAt: string;
-        }>(
-            `SELECT a.*, w.name as weightName, w.weight as weightPercent
-             FROM assessments a
-             LEFT JOIN grading_weights w ON a.weightId = w.id
-             WHERE a.teacherId = ?
-             ORDER BY a.date DESC, a.id DESC`,
-            [teacher.id]
-        );
+        const assessmentsRaw = classId
+            ? await db.getAllAsync<{
+                  id: number;
+                  teacherId: number;
+                  weightId: number | null;
+                  weightName: string | null;
+                  weightPercent: number | null;
+                  title: string;
+                  maxScore: number;
+                  date: string;
+                  createdAt: string;
+              }>(
+                  `SELECT a.*, w.name as weightName, w.weight as weightPercent
+                   FROM assessments a
+                   LEFT JOIN grading_weights w ON a.weightId = w.id
+                   WHERE a.teacherId = ? AND (a.classId = ? OR a.classId IS NULL)
+                   ORDER BY a.date DESC, a.id DESC`,
+                  [teacher.id, classId]
+              )
+            : await db.getAllAsync<{
+                  id: number;
+                  teacherId: number;
+                  weightId: number | null;
+                  weightName: string | null;
+                  weightPercent: number | null;
+                  title: string;
+                  maxScore: number;
+                  date: string;
+                  createdAt: string;
+              }>(
+                  `SELECT a.*, w.name as weightName, w.weight as weightPercent
+                   FROM assessments a
+                   LEFT JOIN grading_weights w ON a.weightId = w.id
+                   WHERE a.teacherId = ?
+                   ORDER BY a.date DESC, a.id DESC`,
+                  [teacher.id]
+              );
 
         const assessments: Assessment[] = (assessmentsRaw ?? []).map((row) => ({
             id: row.id,
@@ -271,25 +318,42 @@ export async function getGradebookSpreadsheet(
             scoresMap[`${s.studentId}_${s.assessmentId}`] = String(s.score);
         }
 
-        // Fetch total attendance sessions for teacher
-        const totalSessionsResult = await db.getFirstAsync<{ count: number }>(
-            "SELECT COUNT(*) as count FROM attendance_sessions WHERE teacherId = ?",
-            [teacher.id]
-        );
+        // Fetch total attendance sessions for teacher & class
+        const totalSessionsResult = classId
+            ? await db.getFirstAsync<{ count: number }>(
+                  "SELECT COUNT(*) as count FROM attendance_sessions WHERE teacherId = ? AND (classId = ? OR classId IS NULL)",
+                  [teacher.id, classId]
+              )
+            : await db.getFirstAsync<{ count: number }>(
+                  "SELECT COUNT(*) as count FROM attendance_sessions WHERE teacherId = ?",
+                  [teacher.id]
+              );
         const totalAttendanceSessions = totalSessionsResult?.count ?? 0;
 
         // Fetch present count per student
-        const attendanceRows = await db.getAllAsync<{
-            studentId: number;
-            presentCount: number;
-        }>(
-            `SELECT ar.studentId, COUNT(*) as presentCount
-             FROM attendance_records ar
-             JOIN attendance_sessions s ON ar.sessionId = s.id
-             WHERE s.teacherId = ? AND (ar.status = '1' OR ar.status = 'present')
-             GROUP BY ar.studentId`,
-            [teacher.id]
-        );
+        const attendanceRows = classId
+            ? await db.getAllAsync<{
+                  studentId: number;
+                  presentCount: number;
+              }>(
+                  `SELECT ar.studentId, COUNT(*) as presentCount
+                   FROM attendance_records ar
+                   JOIN attendance_sessions s ON ar.sessionId = s.id
+                   WHERE s.teacherId = ? AND (s.classId = ? OR s.classId IS NULL) AND (ar.status = '1' OR ar.status = 'present')
+                   GROUP BY ar.studentId`,
+                  [teacher.id, classId]
+              )
+            : await db.getAllAsync<{
+                  studentId: number;
+                  presentCount: number;
+              }>(
+                  `SELECT ar.studentId, COUNT(*) as presentCount
+                   FROM attendance_records ar
+                   JOIN attendance_sessions s ON ar.sessionId = s.id
+                   WHERE s.teacherId = ? AND (ar.status = '1' OR ar.status = 'present')
+                   GROUP BY ar.studentId`,
+                  [teacher.id]
+              );
 
         const attendanceMap: Record<number, { present: number; total: number; percentage: number }> = {};
         for (const s of students) {

@@ -18,6 +18,8 @@ import { attendancePagesStyle } from "../styles/index";
 import { RootParamList } from "../types/RootParamList";
 import type { Student } from "../types/student";
 import type { AttendanceSession } from "../types/attendance";
+import type { ClassItem } from "../types/class";
+import { getClassesByTeacher } from "../services/pages/MyClassPages";
 import {
     createAttendanceSession,
     getAttendanceSpreadsheet,
@@ -74,7 +76,13 @@ function formatFullDate(dateStr: string): string {
 export function AttendancePages() {
     const navigation = useNavigation<NativeStackNavigationProp<RootParamList>>();
     const route = useRoute<RouteProp<RootParamList, "attendance">>();
-    const { username } = route.params;
+    const { username, classId: routeClassId } = route.params;
+
+    // Class selection state
+    const [classes, setClasses] = useState<ClassItem[]>([]);
+    const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
+    const [isClassPickerOpen, setIsClassPickerOpen] = useState(false);
+    const [isLoadingClasses, setIsLoadingClasses] = useState(true);
 
     const [students, setStudents] = useState<Student[]>([]);
     const [sessions, setSessions] = useState<AttendanceSession[]>([]);
@@ -97,18 +105,51 @@ export function AttendancePages() {
         message: "",
     });
 
-    const loadSpreadsheetData = useCallback(async () => {
-        const data = await getAttendanceSpreadsheet(username);
+    const activeClass = useMemo(() => {
+        return classes.find((c) => c.id === selectedClassId) || null;
+    }, [classes, selectedClassId]);
+
+    // Load classes
+    useEffect(() => {
+        let isMounted = true;
+        const initClasses = async () => {
+            setIsLoadingClasses(true);
+            try {
+                const list = await getClassesByTeacher(username);
+                if (!isMounted) return;
+                setClasses(list);
+
+                let initialClassId = routeClassId;
+                if (!initialClassId && list.length > 0) {
+                    initialClassId = list[0].id;
+                }
+                setSelectedClassId(initialClassId || null);
+            } finally {
+                if (isMounted) setIsLoadingClasses(false);
+            }
+        };
+        initClasses();
+        return () => {
+            isMounted = false;
+        };
+    }, [username, routeClassId]);
+
+    const loadSpreadsheetData = useCallback(async (cId?: number | null) => {
+        const targetClassId = cId !== undefined ? cId : selectedClassId;
+        const data = await getAttendanceSpreadsheet(username, targetClassId);
         setStudents(data.students);
         setSessions(data.sessions);
         setRecordsMap(data.recordsMap);
         setSavedRecordsMap(data.recordsMap);
-    }, [username]);
+    }, [username, selectedClassId]);
 
     useEffect(() => {
         let isMounted = true;
+        if (selectedClassId === null) {
+            return;
+        }
         const fetchSpreadsheet = async () => {
-            const data = await getAttendanceSpreadsheet(username);
+            const data = await getAttendanceSpreadsheet(username, selectedClassId);
             if (isMounted) {
                 setStudents(data.students);
                 setSessions(data.sessions);
@@ -120,7 +161,7 @@ export function AttendancePages() {
         return () => {
             isMounted = false;
         };
-    }, [username]);
+    }, [username, selectedClassId]);
 
     const handleTabPress = (tab: NavTab) => {
         if (tab !== "attendance") {
@@ -193,7 +234,8 @@ export function AttendancePages() {
             const result = await createAttendanceSession(
                 username,
                 sessionDate.trim(),
-                sessionTitle.trim() || undefined
+                sessionTitle.trim() || undefined,
+                selectedClassId
             );
 
             if (result.success) {
@@ -361,8 +403,54 @@ export function AttendancePages() {
                     </Text>
                 </View>
 
-                {/* Stats Summary */}
-                <View style={attendancePagesStyle.statsRow}>
+                {/* Class Selector Bar */}
+                {classes.length > 0 && (
+                    <Pressable
+                        onPress={() => setIsClassPickerOpen(true)}
+                        style={attendancePagesStyle.classSelectorBar}
+                    >
+                        <View style={attendancePagesStyle.classSelectorLeft}>
+                            <View
+                                style={[
+                                    attendancePagesStyle.classSelectorDot,
+                                    { backgroundColor: activeClass?.color || "#4F46E5" },
+                                ]}
+                            />
+                            <View style={{ flex: 1 }}>
+                                <Text style={attendancePagesStyle.classSelectorLabel}>Active Class</Text>
+                                <Text style={attendancePagesStyle.classSelectorName} numberOfLines={1}>
+                                    {activeClass
+                                        ? `${activeClass.name}${activeClass.section ? ` • ${activeClass.section}` : ""}`
+                                        : "Select a Class..."}
+                                </Text>
+                            </View>
+                        </View>
+                        <Ionicons name="chevron-down" size={18} color="#64748B" />
+                    </Pressable>
+                )}
+
+                {/* If No Classes Created Yet */}
+                {!isLoadingClasses && classes.length === 0 ? (
+                    <View style={attendancePagesStyle.noClassesCard}>
+                        <Ionicons name="school-outline" size={48} color="#94A3B8" />
+                        <Text style={[attendancePagesStyle.emptyText, { marginTop: 12 }]}>
+                            No Classes Created Yet
+                        </Text>
+                        <Text style={[attendancePagesStyle.emptySubtext, { textAlign: "center", marginHorizontal: 20 }]}>
+                            Please create a class in My Class first before taking attendance.
+                        </Text>
+                        <Pressable
+                            onPress={() => navigation.navigate("myclass", { username })}
+                            style={[attendancePagesStyle.createButton, { marginTop: 16 }]}
+                        >
+                            <Ionicons name="school-outline" size={16} color="#FFFFFF" />
+                            <Text style={attendancePagesStyle.createButtonText}>Go to My Classes</Text>
+                        </Pressable>
+                    </View>
+                ) : (
+                    <>
+                        {/* Stats Summary */}
+                        <View style={attendancePagesStyle.statsRow}>
                     <View style={attendancePagesStyle.statCard}>
                         <Text style={attendancePagesStyle.statValue}>
                             {stats.totalSessions}
@@ -773,7 +861,70 @@ export function AttendancePages() {
                         </View>
                     )}
                 </View>
+                </>
+                )}
             </ScrollView>
+
+            {/* Class Picker Modal */}
+            <Modal
+                visible={isClassPickerOpen}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setIsClassPickerOpen(false)}
+            >
+                <View style={attendancePagesStyle.modalOverlay}>
+                    <View style={attendancePagesStyle.modalContent}>
+                        <View style={attendancePagesStyle.modalHeader}>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                                <Ionicons name="school-outline" size={22} color="#4F46E5" />
+                                <Text style={attendancePagesStyle.modalTitle}>Select Class</Text>
+                            </View>
+                            <Pressable onPress={() => setIsClassPickerOpen(false)} hitSlop={8}>
+                                <Ionicons name="close" size={22} color="#64748B" />
+                            </Pressable>
+                        </View>
+
+                        <Text style={attendancePagesStyle.datePickerSubtitle}>
+                            Choose which class attendance to view & record:
+                        </Text>
+
+                        <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+                            {classes.map((cls) => {
+                                const isSelected = selectedClassId === cls.id;
+                                const accent = cls.color || "#4F46E5";
+                                return (
+                                    <Pressable
+                                        key={cls.id}
+                                        onPress={() => {
+                                            setSelectedClassId(cls.id);
+                                            setIsClassPickerOpen(false);
+                                        }}
+                                        style={[
+                                            attendancePagesStyle.classPickerOption,
+                                            isSelected && attendancePagesStyle.classPickerOptionSelected,
+                                        ]}
+                                    >
+                                        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+                                            <View style={[attendancePagesStyle.classSelectorDot, { backgroundColor: accent }]} />
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A" }}>
+                                                    {cls.name}
+                                                </Text>
+                                                <Text style={{ fontSize: 12, color: "#64748B", marginTop: 1 }}>
+                                                    {cls.section ? `${cls.section} • ` : ""}{cls.studentCount || 0} students
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        {isSelected && (
+                                            <Ionicons name="checkmark-circle" size={20} color="#4F46E5" />
+                                        )}
+                                    </Pressable>
+                                );
+                            })}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
 
             {/* Select Specific Date Modal */}
             <Modal

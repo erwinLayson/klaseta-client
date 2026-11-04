@@ -937,5 +937,75 @@ export const styles = StyleSheet.create({
         color: "#64748B",
         marginTop: 2,
     },
+
+    // ---------------------------------------------------------------------------
+    // Class Selector & Picker Styles
+    // ---------------------------------------------------------------------------
+    classSelectorBar: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        backgroundColor: "#FFFFFF",
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        shadowColor: "#0F172A",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
+        elevation: 2,
+    },
+    classSelectorLeft: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        flex: 1,
+    },
+    classSelectorDot: {
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+    },
+    classSelectorLabel: {
+        fontSize: 11,
+        color: "#64748B",
+        fontWeight: "600",
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+    },
+    classSelectorName: {
+        fontSize: 15,
+        fontWeight: "700",
+        color: "#0F172A",
+        marginTop: 1,
+    },
+    classPickerOption: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        borderRadius: 14,
+        marginBottom: 8,
+        backgroundColor: "#F8FAFC",
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+    },
+    classPickerOptionSelected: {
+        backgroundColor: "#EEF2FF",
+        borderColor: "#C7D2FE",
+    },
+    noClassesCard: {
+        backgroundColor: "#FFFFFF",
+        borderRadius: 20,
+        padding: 24,
+        alignItems: "center",
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        marginVertical: 20,
+    },
 });
 

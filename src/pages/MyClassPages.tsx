@@ -18,11 +18,18 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { myClassPagesStyle } from "../styles/index";
 import { RootParamList } from "../types/RootParamList";
 import type { Student, AddStudentInput } from "../types/student";
+import type { ClassItem, CreateClassInput, UpdateClassInput } from "../types/class";
 import {
-    addStudent,
-    addStudentsBulk,
+    getClassesByTeacher,
+    getClassById,
+    createClass,
+    updateClass,
+    deleteClass,
+    getStudentsByClass,
+    addStudentToClass,
+    addStudentsBulkToClass,
+    removeStudentFromClass,
     parseXlsxFile,
-    getStudentsByTeacher,
 } from "../services/pages/MyClassPages";
 import {
     BottomNavBar,
@@ -45,19 +52,52 @@ const SUFFIX_OPTIONS: SelectOption[] = [
     { label: "V", value: "V" },
 ];
 
+const COLOR_PALETTE = [
+    "#4F46E5", // Indigo
+    "#059669", // Emerald
+    "#0284C7", // Sky
+    "#D97706", // Amber
+    "#E11D48", // Rose
+    "#7C3AED", // Purple
+];
+
 export function MyClassPages() {
     const navigation = useNavigation<NativeStackNavigationProp<RootParamList>>();
     const route = useRoute<RouteProp<RootParamList, "myclass">>();
-    const { username } = route.params;
+    const { username, classId: routeClassId } = route.params;
 
+    // Class list state
+    const [classes, setClasses] = useState<ClassItem[]>([]);
+    const [isLoadingClasses, setIsLoadingClasses] = useState(true);
+    const [classSearchQuery, setClassSearchQuery] = useState("");
+
+    // Active drill-down class
+    const [selectedClass, setSelectedClass] = useState<ClassItem | null>(null);
+
+    // Students in active class
     const [students, setStudents] = useState<Student[]>([]);
-    const [searchQuery, setSearchQuery] = useState("");
+    const [studentSearchQuery, setStudentSearchQuery] = useState("");
     const [sortAsc, setSortAsc] = useState<boolean | null>(null);
 
+    // Create / Edit Class modal state
+    const [isClassModalOpen, setIsClassModalOpen] = useState(false);
+    const [editingClass, setEditingClass] = useState<ClassItem | null>(null);
+    const [className, setClassName] = useState("");
+    const [classSection, setClassSection] = useState("");
+    const [classSubject, setClassSubject] = useState("");
+    const [classRoom, setClassRoom] = useState("");
+    const [classSchedule, setClassSchedule] = useState("");
+    const [classColor, setClassColor] = useState(COLOR_PALETTE[0]);
+    const [isSubmittingClass, setIsSubmittingClass] = useState(false);
+
+    // Delete Class confirmation modal
+    const [deletingClass, setDeletingClass] = useState<ClassItem | null>(null);
+    const [isDeletingClass, setIsDeletingClass] = useState(false);
+
     // Single student modal state
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [form, setForm] = useState<AddStudentInput>({
+    const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
+    const [isSubmittingStudent, setIsSubmittingStudent] = useState(false);
+    const [studentForm, setStudentForm] = useState<AddStudentInput>({
         firstname: "",
         middlename: "",
         lastname: "",
@@ -74,6 +114,7 @@ export function MyClassPages() {
         totalRows: number;
     } | null>(null);
 
+    // Dialog message state
     const [dialog, setDialog] = useState({
         visible: false,
         type: "success" as DialogType,
@@ -81,15 +122,61 @@ export function MyClassPages() {
         message: "",
     });
 
-    const loadStudents = useCallback(async () => {
-        const list = await getStudentsByTeacher(username);
+    // Load all classes
+    const loadClasses = useCallback(async () => {
+        setIsLoadingClasses(true);
+        try {
+            const list = await getClassesByTeacher(username);
+            setClasses(list);
+
+            // If route parameter classId was specified and selectedClass not yet set, auto-open that class
+            if (routeClassId) {
+                const matched = list.find((c) => c.id === routeClassId);
+                if (matched) {
+                    setSelectedClass(matched);
+                }
+            }
+        } finally {
+            setIsLoadingClasses(false);
+        }
+    }, [username, routeClassId]);
+
+    // Load students for currently selected class
+    const loadClassStudents = useCallback(async (classId: number) => {
+        const list = await getStudentsByClass(classId);
         setStudents(list);
-    }, [username]);
+    }, []);
 
     useEffect(() => {
         let isMounted = true;
+        const fetchClasses = async () => {
+            setIsLoadingClasses(true);
+            try {
+                const list = await getClassesByTeacher(username);
+                if (!isMounted) return;
+                setClasses(list);
+
+                if (routeClassId) {
+                    const matched = list.find((c) => c.id === routeClassId);
+                    if (matched) setSelectedClass(matched);
+                }
+            } finally {
+                if (isMounted) setIsLoadingClasses(false);
+            }
+        };
+        fetchClasses();
+        return () => {
+            isMounted = false;
+        };
+    }, [username, routeClassId]);
+
+    useEffect(() => {
+        let isMounted = true;
+        if (!selectedClass) {
+            return;
+        }
         const fetchStudents = async () => {
-            const list = await getStudentsByTeacher(username);
+            const list = await getStudentsByClass(selectedClass.id);
             if (isMounted) {
                 setStudents(list);
             }
@@ -98,7 +185,7 @@ export function MyClassPages() {
         return () => {
             isMounted = false;
         };
-    }, [username]);
+    }, [selectedClass]);
 
     const handleTabPress = (tab: NavTab) => {
         if (tab !== "myclass") {
@@ -106,67 +193,204 @@ export function MyClassPages() {
         }
     };
 
-    const setField = (field: keyof AddStudentInput, value: string) => {
-        setForm((prev) => ({ ...prev, [field]: value }));
+    // ---------------------------------------------------------------------------
+    // Class Actions
+    // ---------------------------------------------------------------------------
+    const handleOpenCreateClass = () => {
+        setEditingClass(null);
+        setClassName("");
+        setClassSection("");
+        setClassSubject("");
+        setClassRoom("");
+        setClassSchedule("");
+        setClassColor(COLOR_PALETTE[0]);
+        setIsClassModalOpen(true);
     };
 
-    const handleOpenModal = () => {
-        setForm({
-            firstname: "",
-            middlename: "",
-            lastname: "",
-            suffix: "None",
-        });
-        setIsModalOpen(true);
+    const handleOpenEditClass = (cls: ClassItem) => {
+        setEditingClass(cls);
+        setClassName(cls.name);
+        setClassSection(cls.section || "");
+        setClassSubject(cls.subject || "");
+        setClassRoom(cls.room || "");
+        setClassSchedule(cls.schedule || "");
+        setClassColor(cls.color || COLOR_PALETTE[0]);
+        setIsClassModalOpen(true);
     };
 
-    const handleSubmitStudent = async () => {
-        if (isSubmitting) return;
+    const handleSubmitClass = async () => {
+        if (isSubmittingClass) return;
 
-        if (!form.firstname.trim() || !form.lastname.trim()) {
+        if (!className.trim()) {
             setDialog({
                 visible: true,
                 type: "error",
-                title: "Missing Fields",
-                message: "First name and last name are required.",
+                title: "Missing Class Name",
+                message: "Please enter a name for the class (e.g. Mathematics 10).",
             });
             return;
         }
 
-        setIsSubmitting(true);
+        setIsSubmittingClass(true);
         try {
-            const result = await addStudent(username, form);
+            if (editingClass) {
+                const updateInput: UpdateClassInput = {
+                    id: editingClass.id,
+                    name: className.trim(),
+                    section: classSection.trim() || undefined,
+                    subject: classSubject.trim() || undefined,
+                    room: classRoom.trim() || undefined,
+                    schedule: classSchedule.trim() || undefined,
+                    color: classColor,
+                };
+                const res = await updateClass(updateInput);
+                if (res.success) {
+                    setIsClassModalOpen(false);
+                    await loadClasses();
+                    // Update selectedClass in place if currently viewing it
+                    if (selectedClass && selectedClass.id === editingClass.id) {
+                        const refreshed = await getClassById(editingClass.id);
+                        if (refreshed) setSelectedClass(refreshed);
+                    }
+                    setDialog({
+                        visible: true,
+                        type: "success",
+                        title: "Class Updated",
+                        message: `"${className.trim()}" has been updated successfully.`,
+                    });
+                } else {
+                    setDialog({
+                        visible: true,
+                        type: "error",
+                        title: "Update Failed",
+                        message: res.message,
+                    });
+                }
+            } else {
+                const createInput: CreateClassInput = {
+                    name: className.trim(),
+                    section: classSection.trim() || undefined,
+                    subject: classSubject.trim() || undefined,
+                    room: classRoom.trim() || undefined,
+                    schedule: classSchedule.trim() || undefined,
+                    color: classColor,
+                };
+                const res = await createClass(username, createInput);
+                if (res.success) {
+                    setIsClassModalOpen(false);
+                    await loadClasses();
+                    setDialog({
+                        visible: true,
+                        type: "success",
+                        title: "Class Created",
+                        message: `"${className.trim()}" has been created successfully. Tap it to start adding students!`,
+                    });
+                } else {
+                    setDialog({
+                        visible: true,
+                        type: "error",
+                        title: "Creation Failed",
+                        message: res.message,
+                    });
+                }
+            }
+        } finally {
+            setIsSubmittingClass(false);
+        }
+    };
 
-            if (result.success) {
-                setIsModalOpen(false);
-                setForm({
-                    firstname: "",
-                    middlename: "",
-                    lastname: "",
-                    suffix: "None",
-                });
-                await loadStudents();
+    const handleDeleteClass = async () => {
+        if (!deletingClass || isDeletingClass) return;
+
+        setIsDeletingClass(true);
+        try {
+            const res = await deleteClass(deletingClass.id);
+            if (res.success) {
+                setDeletingClass(null);
+                if (selectedClass?.id === deletingClass.id) {
+                    setSelectedClass(null);
+                }
+                await loadClasses();
                 setDialog({
                     visible: true,
                     type: "success",
-                    title: "Student Added",
-                    message: result.message,
+                    title: "Class Deleted",
+                    message: "The class has been deleted.",
                 });
             } else {
                 setDialog({
                     visible: true,
                     type: "error",
-                    title: "Error",
-                    message: result.message,
+                    title: "Delete Failed",
+                    message: res.message,
                 });
             }
         } finally {
-            setIsSubmitting(false);
+            setIsDeletingClass(false);
         }
     };
 
-    // Bulk XLSX File Picker
+    // ---------------------------------------------------------------------------
+    // Student Actions (within active class)
+    // ---------------------------------------------------------------------------
+    const handleOpenAddStudent = () => {
+        setStudentForm({
+            firstname: "",
+            middlename: "",
+            lastname: "",
+            suffix: "None",
+        });
+        setIsStudentModalOpen(true);
+    };
+
+    const handleSubmitStudent = async () => {
+        if (!selectedClass || isSubmittingStudent) return;
+
+        if (!studentForm.firstname.trim() || !studentForm.lastname.trim()) {
+            setDialog({
+                visible: true,
+                type: "error",
+                title: "Missing Name",
+                message: "First name and last name are required.",
+            });
+            return;
+        }
+
+        setIsSubmittingStudent(true);
+        try {
+            const res = await addStudentToClass(username, selectedClass.id, studentForm);
+            if (res.success) {
+                setIsStudentModalOpen(false);
+                setStudentForm({
+                    firstname: "",
+                    middlename: "",
+                    lastname: "",
+                    suffix: "None",
+                });
+                await loadClassStudents(selectedClass.id);
+                await loadClasses();
+                setDialog({
+                    visible: true,
+                    type: "success",
+                    title: "Student Enrolled",
+                    message: `${studentForm.firstname.trim()} has been enrolled in ${selectedClass.name}.`,
+                });
+            } else {
+                setDialog({
+                    visible: true,
+                    type: "error",
+                    title: "Failed to Add Student",
+                    message: res.message,
+                });
+            }
+        } finally {
+            setIsSubmittingStudent(false);
+        }
+    };
+
     const handlePickXlsx = async () => {
+        if (!selectedClass) return;
+
         try {
             const result = await DocumentPicker.getDocumentAsync({
                 type: [
@@ -201,7 +425,6 @@ export function MyClassPages() {
             }
 
             setIsBulkLoading(true);
-
             const parsed = await parseXlsxFile(asset.uri);
 
             if (parsed.students.length === 0) {
@@ -210,7 +433,7 @@ export function MyClassPages() {
                     type: "error",
                     title: "No Valid Records",
                     message:
-                        "No student records with first and last names were found in this file. Please ensure your column headers include First Name and Last Name.",
+                        "No student records with first and last names were found in this file. Please ensure column headers include First Name and Last Name.",
                 });
                 return;
             }
@@ -236,43 +459,86 @@ export function MyClassPages() {
     };
 
     const handleConfirmBulkImport = async () => {
-        if (!bulkPreview || isBulkLoading) return;
+        if (!selectedClass || !bulkPreview || isBulkLoading) return;
 
         setIsBulkLoading(true);
         try {
-            const result = await addStudentsBulk(username, bulkPreview.students);
-
+            const res = await addStudentsBulkToClass(username, selectedClass.id, bulkPreview.students);
             setIsBulkModalOpen(false);
             setBulkPreview(null);
-            await loadStudents();
+            await loadClassStudents(selectedClass.id);
+            await loadClasses();
 
             setDialog({
                 visible: true,
-                type: result.success ? "success" : "error",
-                title: result.success ? "Bulk Import Completed" : "Import Error",
-                message: result.message,
+                type: res.success ? "success" : "error",
+                title: res.success ? "Bulk Import Completed" : "Import Error",
+                message: res.message,
             });
         } finally {
             setIsBulkLoading(false);
         }
     };
 
-    const formatStudentName = useCallback((student: { firstname: string; middlename?: string | null; lastname: string; suffix?: string | null }) => {
-        const parts = [student.firstname];
-        if (student.middlename) parts.push(student.middlename);
-        parts.push(student.lastname);
-        if (student.suffix && student.suffix !== "None") parts.push(student.suffix);
-        return parts.join(" ");
-    }, []);
+    const handleRemoveStudent = async (studentId: number, studentName: string) => {
+        if (!selectedClass) return;
 
+        const res = await removeStudentFromClass(selectedClass.id, studentId);
+        if (res.success) {
+            await loadClassStudents(selectedClass.id);
+            await loadClasses();
+            setDialog({
+                visible: true,
+                type: "success",
+                title: "Student Removed",
+                message: `${studentName} was removed from this class.`,
+            });
+        } else {
+            setDialog({
+                visible: true,
+                type: "error",
+                title: "Removal Failed",
+                message: res.message,
+            });
+        }
+    };
+
+    const formatStudentName = useCallback(
+        (st: { firstname: string; middlename?: string | null; lastname: string; suffix?: string | null }) => {
+            const parts = [st.firstname];
+            if (st.middlename) parts.push(st.middlename);
+            parts.push(st.lastname);
+            if (st.suffix && st.suffix !== "None") parts.push(st.suffix);
+            return parts.join(" ");
+        },
+        []
+    );
+
+    // Filter classes list
+    const filteredClasses = useMemo(() => {
+        if (!classSearchQuery.trim()) return classes;
+        const q = classSearchQuery.trim().toLowerCase();
+        return classes.filter((c) => {
+            const name = c.name.toLowerCase();
+            const sec = (c.section || "").toLowerCase();
+            const sub = (c.subject || "").toLowerCase();
+            return name.includes(q) || sec.includes(q) || sub.includes(q);
+        });
+    }, [classes, classSearchQuery]);
+
+    // Total enrolled students across all classes
+    const totalStudentsCount = useMemo(() => {
+        return classes.reduce((sum, c) => sum + (c.studentCount || 0), 0);
+    }, [classes]);
+
+    // Filter students within active class
     const filteredStudents = useMemo(() => {
         let result = students;
-
-        if (searchQuery.trim()) {
-            const query = searchQuery.trim().toLowerCase();
-            result = result.filter((student) => {
-                const fullName = formatStudentName(student).toLowerCase();
-                return fullName.includes(query);
+        if (studentSearchQuery.trim()) {
+            const q = studentSearchQuery.trim().toLowerCase();
+            result = result.filter((st) => {
+                const fullName = formatStudentName(st).toLowerCase();
+                return fullName.includes(q);
             });
         }
 
@@ -283,9 +549,8 @@ export function MyClassPages() {
                 return sortAsc ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
             });
         }
-
         return result;
-    }, [students, searchQuery, sortAsc, formatStudentName]);
+    }, [students, studentSearchQuery, sortAsc, formatStudentName]);
 
     const toggleSort = () => {
         if (sortAsc === null) setSortAsc(true);
@@ -302,316 +567,727 @@ export function MyClassPages() {
                 contentContainerStyle={myClassPagesStyle.scrollView}
                 showsVerticalScrollIndicator={false}
             >
-                <View style={myClassPagesStyle.header}>
-                    <View style={myClassPagesStyle.headerTopRow}>
-                        <View style={myClassPagesStyle.headerTitleRow}>
-                            <Ionicons name="school-outline" size={26} color="#4F46E5" />
-                            <Text style={myClassPagesStyle.greeting}>My Class</Text>
-                        </View>
+                {/* =========================================================================
+                    VIEW A: ALL CLASSES OVERVIEW (Cards)
+                    ========================================================================= */}
+                {!selectedClass ? (
+                    <>
+                        <View style={myClassPagesStyle.header}>
+                            <View style={myClassPagesStyle.headerTopRow}>
+                                <View style={myClassPagesStyle.headerTitleRow}>
+                                    <Ionicons name="school-outline" size={26} color="#4F46E5" />
+                                    <Text style={myClassPagesStyle.greeting}>My Classes</Text>
+                                </View>
 
-                        <View style={myClassPagesStyle.headerActions}>
-                            <Pressable
-                                onPress={handlePickXlsx}
-                                disabled={isBulkLoading}
-                                style={({ pressed }) => [
-                                    myClassPagesStyle.bulkButton,
-                                    pressed && myClassPagesStyle.bulkButtonPressed,
-                                ]}
-                            >
-                                {isBulkLoading ? (
-                                    <ActivityIndicator size="small" color="#4F46E5" />
-                                ) : (
-                                    <Ionicons name="cloud-upload-outline" size={16} color="#4F46E5" />
-                                )}
-                                <Text style={myClassPagesStyle.bulkButtonText}>
-                                    {isBulkLoading ? "Reading..." : "Bulk Upload"}
-                                </Text>
-                            </Pressable>
-
-                            <Pressable
-                                onPress={handleOpenModal}
-                                style={({ pressed }) => [
-                                    myClassPagesStyle.addButton,
-                                    pressed && myClassPagesStyle.addButtonPressed,
-                                ]}
-                            >
-                                <Ionicons name="person-add-outline" size={16} color="#FFFFFF" />
-                                <Text style={myClassPagesStyle.addButtonText}>Add Student</Text>
-                            </Pressable>
-                        </View>
-                    </View>
-                    <Text style={myClassPagesStyle.subtitle}>
-                        Manage enrolled students in your class
-                    </Text>
-                </View>
-
-                <View style={myClassPagesStyle.statsRow}>
-                    <View style={myClassPagesStyle.statCard}>
-                        <Text style={myClassPagesStyle.statValue}>{students.length}</Text>
-                        <Text style={myClassPagesStyle.statLabel}>Total Students</Text>
-                    </View>
-                    <View style={myClassPagesStyle.statCard}>
-                        <Text style={myClassPagesStyle.statValue}>1</Text>
-                        <Text style={myClassPagesStyle.statLabel}>Active Class</Text>
-                    </View>
-                </View>
-
-                <View style={myClassPagesStyle.section}>
-                    <View style={myClassPagesStyle.sectionHeaderRow}>
-                        <Text style={myClassPagesStyle.sectionTitle}>Students Roster</Text>
-                        <View style={myClassPagesStyle.countBadge}>
-                            <Text style={myClassPagesStyle.countBadgeText}>
-                                {filteredStudents.length} of {students.length}
-                            </Text>
-                        </View>
-                    </View>
-
-                    {/* Filter by Name Header */}
-                    <View style={myClassPagesStyle.filterContainer}>
-                        <Ionicons name="search-outline" size={18} color="#94A3B8" />
-                        <TextInput
-                            style={myClassPagesStyle.filterInput}
-                            placeholder="Filter by student name..."
-                            placeholderTextColor="#94A3B8"
-                            value={searchQuery}
-                            onChangeText={setSearchQuery}
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                        />
-                        {searchQuery.length > 0 && (
-                            <Pressable
-                                onPress={() => setSearchQuery("")}
-                                style={myClassPagesStyle.filterClearButton}
-                                hitSlop={8}
-                            >
-                                <Ionicons name="close-circle" size={18} color="#94A3B8" />
-                            </Pressable>
-                        )}
-                    </View>
-
-                    {/* Students Table */}
-                    {students.length === 0 ? (
-                        <View style={myClassPagesStyle.emptyCard}>
-                            <Ionicons
-                                name="people-outline"
-                                size={44}
-                                color="#94A3B8"
-                                style={myClassPagesStyle.emptyIcon}
-                            />
-                            <Text style={myClassPagesStyle.emptyText}>No students added yet</Text>
-                            <Text style={myClassPagesStyle.emptySubtext}>
-                                Tap &quot;Add Student&quot; or &quot;Bulk Upload&quot; to import your class roster from an Excel file.
-                            </Text>
-                            <View style={myClassPagesStyle.emptyActionsRow}>
-                                <Pressable
-                                    onPress={handleOpenModal}
-                                    style={({ pressed }) => [
-                                        myClassPagesStyle.addButton,
-                                        pressed && myClassPagesStyle.addButtonPressed,
-                                    ]}
-                                >
-                                    <Ionicons name="add" size={18} color="#FFFFFF" />
-                                    <Text style={myClassPagesStyle.addButtonText}>Add Student</Text>
-                                </Pressable>
-
-                                <Pressable
-                                    onPress={handlePickXlsx}
-                                    style={({ pressed }) => [
-                                        myClassPagesStyle.bulkButton,
-                                        pressed && myClassPagesStyle.bulkButtonPressed,
-                                    ]}
-                                >
-                                    <Ionicons name="cloud-upload-outline" size={16} color="#4F46E5" />
-                                    <Text style={myClassPagesStyle.bulkButtonText}>Bulk Upload</Text>
-                                </Pressable>
-                            </View>
-                        </View>
-                    ) : (
-                        <View style={myClassPagesStyle.tableCard}>
-                            {/* Table Header Row */}
-                            <View style={myClassPagesStyle.tableHeader}>
-                                <Text
-                                    style={[
-                                        myClassPagesStyle.tableHeaderCell,
-                                        myClassPagesStyle.tableCellIndex,
-                                    ]}
-                                >
-                                    #
-                                </Text>
-
-                                <Pressable
-                                    onPress={toggleSort}
-                                    style={myClassPagesStyle.tableHeaderNameCell}
-                                >
-                                    <Text style={myClassPagesStyle.tableHeaderCell}>Name</Text>
-                                    <Ionicons
-                                        name={
-                                            sortAsc === true
-                                                ? "arrow-up"
-                                                : sortAsc === false
-                                                ? "arrow-down"
-                                                : "swap-vertical"
-                                        }
-                                        size={14}
-                                        color={sortAsc !== null ? "#4F46E5" : "#94A3B8"}
-                                    />
-                                </Pressable>
-
-                                <Text
-                                    style={[
-                                        myClassPagesStyle.tableHeaderCell,
-                                        myClassPagesStyle.tableCellSuffix,
-                                        { textAlign: "center" },
-                                    ]}
-                                >
-                                    Suffix
-                                </Text>
-
-                                <Text
-                                    style={[
-                                        myClassPagesStyle.tableHeaderCell,
-                                        myClassPagesStyle.tableCellId,
-                                    ]}
-                                >
-                                    ID
-                                </Text>
-                            </View>
-
-                            {/* Table Body Rows */}
-                            {filteredStudents.length === 0 ? (
-                                <View style={myClassPagesStyle.tableEmptyMessage}>
-                                    <Ionicons name="search" size={28} color="#CBD5E1" />
-                                    <Text style={myClassPagesStyle.tableEmptyText}>
-                                        No students found matching &quot;{searchQuery}&quot;
-                                    </Text>
+                                <View style={myClassPagesStyle.headerActions}>
                                     <Pressable
-                                        onPress={() => setSearchQuery("")}
-                                        style={myClassPagesStyle.clearFilterButton}
+                                        onPress={handleOpenCreateClass}
+                                        style={({ pressed }) => [
+                                            myClassPagesStyle.addButton,
+                                            pressed && myClassPagesStyle.addButtonPressed,
+                                        ]}
                                     >
-                                        <Text style={myClassPagesStyle.clearFilterButtonText}>
-                                            Clear Filter
-                                        </Text>
+                                        <Ionicons name="add" size={18} color="#FFFFFF" />
+                                        <Text style={myClassPagesStyle.addButtonText}>Create Class</Text>
                                     </Pressable>
                                 </View>
-                            ) : (
-                                filteredStudents.map((student, index) => {
-                                    const hasSuffix =
-                                        student.suffix && student.suffix !== "None";
+                            </View>
+                            <Text style={myClassPagesStyle.subtitle}>
+                                Manage your active classes and student rosters
+                            </Text>
+                        </View>
 
-                                    return (
-                                        <View
-                                            key={student.id}
-                                            style={[
-                                                myClassPagesStyle.tableRow,
-                                                index % 2 === 0
-                                                    ? myClassPagesStyle.tableRowEven
-                                                    : myClassPagesStyle.tableRowOdd,
-                                            ]}
-                                        >
-                                            <Text style={myClassPagesStyle.tableCellIndex}>
-                                                {index + 1}
-                                            </Text>
+                        {/* Stats Summary */}
+                        <View style={myClassPagesStyle.statsRow}>
+                            <View style={myClassPagesStyle.statCard}>
+                                <Text style={myClassPagesStyle.statValue}>{classes.length}</Text>
+                                <Text style={myClassPagesStyle.statLabel}>Total Classes</Text>
+                            </View>
+                            <View style={myClassPagesStyle.statCard}>
+                                <Text style={[myClassPagesStyle.statValue, { color: "#059669" }]}>
+                                    {totalStudentsCount}
+                                </Text>
+                                <Text style={myClassPagesStyle.statLabel}>Enrolled Students</Text>
+                            </View>
+                        </View>
 
-                                            <View style={myClassPagesStyle.tableCellName}>
-                                                <Text
-                                                    style={myClassPagesStyle.studentFullName}
-                                                    numberOfLines={1}
-                                                >
-                                                    {student.firstname}{" "}
-                                                    {student.middlename ? `${student.middlename} ` : ""}
-                                                    {student.lastname}
-                                                </Text>
-                                            </View>
-
-                                            <View style={myClassPagesStyle.tableCellSuffix}>
-                                                {hasSuffix ? (
-                                                    <View style={myClassPagesStyle.suffixBadge}>
-                                                        <Text
-                                                            style={
-                                                                myClassPagesStyle.suffixBadgeText
-                                                            }
-                                                        >
-                                                            {student.suffix}
-                                                        </Text>
-                                                    </View>
-                                                ) : (
-                                                    <Text style={myClassPagesStyle.noSuffixText}>
-                                                        —
-                                                    </Text>
-                                                )}
-                                            </View>
-
-                                            <Text style={myClassPagesStyle.tableCellId}>
-                                                #{student.id}
-                                            </Text>
-                                        </View>
-                                    );
-                                })
+                        {/* Search Filter for Classes */}
+                        <View style={myClassPagesStyle.filterContainer}>
+                            <Ionicons name="search-outline" size={18} color="#94A3B8" />
+                            <TextInput
+                                style={myClassPagesStyle.filterInput}
+                                placeholder="Search classes by name, section, or subject..."
+                                placeholderTextColor="#94A3B8"
+                                value={classSearchQuery}
+                                onChangeText={setClassSearchQuery}
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                            />
+                            {classSearchQuery.length > 0 && (
+                                <Pressable
+                                    onPress={() => setClassSearchQuery("")}
+                                    style={myClassPagesStyle.filterClearButton}
+                                    hitSlop={8}
+                                >
+                                    <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                                </Pressable>
                             )}
                         </View>
-                    )}
-                </View>
+
+                        {/* Classes Cards Grid */}
+                        {isLoadingClasses ? (
+                            <View style={{ paddingVertical: 40, alignItems: "center" }}>
+                                <ActivityIndicator size="large" color="#4F46E5" />
+                                <Text style={{ color: "#64748B", marginTop: 10, fontSize: 14 }}>
+                                    Loading classes...
+                                </Text>
+                            </View>
+                        ) : filteredClasses.length === 0 ? (
+                            <View style={myClassPagesStyle.emptyCard}>
+                                <Ionicons
+                                    name="school-outline"
+                                    size={48}
+                                    color="#94A3B8"
+                                    style={myClassPagesStyle.emptyIcon}
+                                />
+                                <Text style={myClassPagesStyle.emptyText}>
+                                    {classSearchQuery.trim()
+                                        ? `No classes matching "${classSearchQuery}"`
+                                        : "No classes created yet"}
+                                </Text>
+                                <Text style={myClassPagesStyle.emptySubtext}>
+                                    {classSearchQuery.trim()
+                                        ? "Try searching with a different keyword."
+                                        : "Create your first class to start tracking attendance and managing grades."}
+                                </Text>
+                                {!classSearchQuery.trim() && (
+                                    <Pressable
+                                        onPress={handleOpenCreateClass}
+                                        style={[myClassPagesStyle.addButton, { marginTop: 14, alignSelf: "center" }]}
+                                    >
+                                        <Ionicons name="add" size={18} color="#FFFFFF" />
+                                        <Text style={myClassPagesStyle.addButtonText}>Create First Class</Text>
+                                    </Pressable>
+                                )}
+                            </View>
+                        ) : (
+                            <View style={myClassPagesStyle.classesGrid}>
+                                {filteredClasses.map((item) => {
+                                    const accentColor = item.color || "#4F46E5";
+                                    return (
+                                        <Pressable
+                                            key={item.id}
+                                            onPress={() => setSelectedClass(item)}
+                                            style={({ pressed }) => [
+                                                myClassPagesStyle.classCard,
+                                                pressed && myClassPagesStyle.classCardPressed,
+                                            ]}
+                                        >
+                                            {/* Colored Top Accent Bar */}
+                                            <View
+                                                style={[
+                                                    myClassPagesStyle.classCardColorBar,
+                                                    { backgroundColor: accentColor },
+                                                ]}
+                                            />
+
+                                            <View style={myClassPagesStyle.classCardBody}>
+                                                <View style={myClassPagesStyle.classCardTopRow}>
+                                                    <View style={myClassPagesStyle.classCardTitleBlock}>
+                                                        <Text
+                                                            style={myClassPagesStyle.classCardName}
+                                                            numberOfLines={1}
+                                                        >
+                                                            {item.name}
+                                                        </Text>
+                                                        {item.subject ? (
+                                                            <Text
+                                                                style={myClassPagesStyle.classCardSubject}
+                                                                numberOfLines={1}
+                                                            >
+                                                                {item.subject}
+                                                            </Text>
+                                                        ) : null}
+                                                    </View>
+
+                                                    {item.section ? (
+                                                        <View
+                                                            style={[
+                                                                myClassPagesStyle.classCardSectionBadge,
+                                                                { backgroundColor: `${accentColor}1A` },
+                                                            ]}
+                                                        >
+                                                            <Text
+                                                                style={[
+                                                                    myClassPagesStyle.classCardSectionText,
+                                                                    { color: accentColor },
+                                                                ]}
+                                                            >
+                                                                {item.section}
+                                                            </Text>
+                                                        </View>
+                                                    ) : null}
+                                                </View>
+
+                                                {/* Room and Schedule info */}
+                                                {(item.room || item.schedule) ? (
+                                                    <View style={myClassPagesStyle.classCardDetailsRow}>
+                                                        {item.room ? (
+                                                            <View style={myClassPagesStyle.classCardDetailItem}>
+                                                                <Ionicons name="location-outline" size={13} color="#64748B" />
+                                                                <Text style={myClassPagesStyle.classCardDetailText}>
+                                                                    {item.room}
+                                                                </Text>
+                                                            </View>
+                                                        ) : null}
+                                                        {item.schedule ? (
+                                                            <View style={myClassPagesStyle.classCardDetailItem}>
+                                                                <Ionicons name="time-outline" size={13} color="#64748B" />
+                                                                <Text style={myClassPagesStyle.classCardDetailText}>
+                                                                    {item.schedule}
+                                                                </Text>
+                                                            </View>
+                                                        ) : null}
+                                                    </View>
+                                                ) : null}
+
+                                                {/* Card Footer */}
+                                                <View style={myClassPagesStyle.classCardFooter}>
+                                                    <View style={myClassPagesStyle.classCardStudentCountBadge}>
+                                                        <Ionicons name="people" size={15} color="#475569" />
+                                                        <Text style={myClassPagesStyle.classCardStudentCountText}>
+                                                            {item.studentCount || 0} Student{item.studentCount === 1 ? "" : "s"}
+                                                        </Text>
+                                                    </View>
+
+                                                    <View style={myClassPagesStyle.classCardActionIcons}>
+                                                        <Pressable
+                                                            onPress={(e) => {
+                                                                e.stopPropagation();
+                                                                handleOpenEditClass(item);
+                                                            }}
+                                                            hitSlop={6}
+                                                            style={myClassPagesStyle.classCardIconBtn}
+                                                        >
+                                                            <Ionicons name="create-outline" size={16} color="#64748B" />
+                                                        </Pressable>
+                                                        <Pressable
+                                                            onPress={(e) => {
+                                                                e.stopPropagation();
+                                                                setDeletingClass(item);
+                                                            }}
+                                                            hitSlop={6}
+                                                            style={myClassPagesStyle.classCardIconBtn}
+                                                        >
+                                                            <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                                                        </Pressable>
+                                                        <View
+                                                            style={[
+                                                                myClassPagesStyle.classCardOpenBadge,
+                                                                { backgroundColor: `${accentColor}15` },
+                                                            ]}
+                                                        >
+                                                            <Text
+                                                                style={[
+                                                                    myClassPagesStyle.classCardOpenText,
+                                                                    { color: accentColor },
+                                                                ]}
+                                                            >
+                                                                Open Roster
+                                                            </Text>
+                                                            <Ionicons name="chevron-forward" size={14} color={accentColor} />
+                                                        </View>
+                                                    </View>
+                                                </View>
+                                            </View>
+                                        </Pressable>
+                                    );
+                                })}
+                            </View>
+                        )}
+                    </>
+                ) : (
+                    /* =========================================================================
+                       VIEW B: CLASS DETAILS & STUDENT ROSTER (Drill-down)
+                       ========================================================================= */
+                    <>
+                        {/* Class Header Card with Navigation & Actions */}
+                        <View style={myClassPagesStyle.classDetailHeaderCard}>
+                            <View style={myClassPagesStyle.classDetailTopBar}>
+                                <Pressable
+                                    onPress={() => setSelectedClass(null)}
+                                    style={myClassPagesStyle.backButton}
+                                    hitSlop={8}
+                                >
+                                    <Ionicons name="arrow-back" size={16} color="#4F46E5" />
+                                    <Text style={myClassPagesStyle.backButtonText}>All Classes</Text>
+                                </Pressable>
+
+                                <View style={{ flexDirection: "row", gap: 6 }}>
+                                    <Pressable
+                                        onPress={() => handleOpenEditClass(selectedClass)}
+                                        style={myClassPagesStyle.classCardIconBtn}
+                                        hitSlop={8}
+                                    >
+                                        <Ionicons name="create-outline" size={17} color="#4F46E5" />
+                                    </Pressable>
+                                    <Pressable
+                                        onPress={() => setDeletingClass(selectedClass)}
+                                        style={myClassPagesStyle.classCardIconBtn}
+                                        hitSlop={8}
+                                    >
+                                        <Ionicons name="trash-outline" size={17} color="#EF4444" />
+                                    </Pressable>
+                                </View>
+                            </View>
+
+                            <Text style={myClassPagesStyle.classDetailTitle}>
+                                {selectedClass.name}
+                            </Text>
+                            {selectedClass.subject ? (
+                                <Text style={myClassPagesStyle.classDetailSubtitle}>
+                                    {selectedClass.subject}
+                                </Text>
+                            ) : null}
+
+                            <View style={myClassPagesStyle.classDetailMetaRow}>
+                                {selectedClass.section ? (
+                                    <View style={myClassPagesStyle.classDetailMetaBadge}>
+                                        <Ionicons name="bookmark-outline" size={13} color="#475569" />
+                                        <Text style={myClassPagesStyle.classDetailMetaBadgeText}>
+                                            Section: {selectedClass.section}
+                                        </Text>
+                                    </View>
+                                ) : null}
+                                {selectedClass.room ? (
+                                    <View style={myClassPagesStyle.classDetailMetaBadge}>
+                                        <Ionicons name="location-outline" size={13} color="#475569" />
+                                        <Text style={myClassPagesStyle.classDetailMetaBadgeText}>
+                                            {selectedClass.room}
+                                        </Text>
+                                    </View>
+                                ) : null}
+                                {selectedClass.schedule ? (
+                                    <View style={myClassPagesStyle.classDetailMetaBadge}>
+                                        <Ionicons name="time-outline" size={13} color="#475569" />
+                                        <Text style={myClassPagesStyle.classDetailMetaBadgeText}>
+                                            {selectedClass.schedule}
+                                        </Text>
+                                    </View>
+                                ) : null}
+                                <View style={myClassPagesStyle.classDetailMetaBadge}>
+                                    <Ionicons name="people" size={13} color="#4F46E5" />
+                                    <Text style={[myClassPagesStyle.classDetailMetaBadgeText, { color: "#4F46E5", fontWeight: "700" }]}>
+                                        {students.length} Enrolled
+                                    </Text>
+                                </View>
+                            </View>
+
+                            {/* Quick Links to Attendance & Gradebook for this class */}
+                            <View style={myClassPagesStyle.classDetailQuickNavRow}>
+                                <Pressable
+                                    onPress={() => navigation.navigate("attendance", { username, classId: selectedClass.id })}
+                                    style={myClassPagesStyle.classQuickNavBtn}
+                                >
+                                    <Ionicons name="calendar-outline" size={15} color="#059669" />
+                                    <Text style={[myClassPagesStyle.classQuickNavBtnText, { color: "#059669" }]}>
+                                        Class Attendance
+                                    </Text>
+                                </Pressable>
+                                <Pressable
+                                    onPress={() => navigation.navigate("gradebook", { username, classId: selectedClass.id })}
+                                    style={myClassPagesStyle.classQuickNavBtn}
+                                >
+                                    <Ionicons name="ribbon-outline" size={15} color="#4F46E5" />
+                                    <Text style={[myClassPagesStyle.classQuickNavBtnText, { color: "#4F46E5" }]}>
+                                        Class Gradebook
+                                    </Text>
+                                </Pressable>
+                            </View>
+                        </View>
+
+                        {/* Student Roster Section Header with Add & Bulk Upload Buttons */}
+                        <View style={myClassPagesStyle.section}>
+                            <View style={myClassPagesStyle.classRosterActionBar}>
+                                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                                    <Text style={myClassPagesStyle.sectionTitle}>Class Roster</Text>
+                                    <View style={myClassPagesStyle.countBadge}>
+                                        <Text style={myClassPagesStyle.countBadgeText}>
+                                            {filteredStudents.length} of {students.length}
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                <View style={{ flexDirection: "row", gap: 8 }}>
+                                    <Pressable
+                                        onPress={handlePickXlsx}
+                                        disabled={isBulkLoading}
+                                        style={({ pressed }) => [
+                                            myClassPagesStyle.bulkButton,
+                                            pressed && myClassPagesStyle.bulkButtonPressed,
+                                        ]}
+                                    >
+                                        {isBulkLoading ? (
+                                            <ActivityIndicator size="small" color="#4F46E5" />
+                                        ) : (
+                                            <Ionicons name="cloud-upload-outline" size={15} color="#4F46E5" />
+                                        )}
+                                        <Text style={myClassPagesStyle.bulkButtonText}>Import</Text>
+                                    </Pressable>
+
+                                    <Pressable
+                                        onPress={handleOpenAddStudent}
+                                        style={({ pressed }) => [
+                                            myClassPagesStyle.addButton,
+                                            pressed && myClassPagesStyle.addButtonPressed,
+                                        ]}
+                                    >
+                                        <Ionicons name="person-add" size={15} color="#FFFFFF" />
+                                        <Text style={myClassPagesStyle.addButtonText}>Add Student</Text>
+                                    </Pressable>
+                                </View>
+                            </View>
+
+                            {/* Search Student in Roster */}
+                            <View style={myClassPagesStyle.filterContainer}>
+                                <Ionicons name="search-outline" size={18} color="#94A3B8" />
+                                <TextInput
+                                    style={myClassPagesStyle.filterInput}
+                                    placeholder="Search student in this class..."
+                                    placeholderTextColor="#94A3B8"
+                                    value={studentSearchQuery}
+                                    onChangeText={setStudentSearchQuery}
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                />
+                                {studentSearchQuery.length > 0 && (
+                                    <Pressable
+                                        onPress={() => setStudentSearchQuery("")}
+                                        style={myClassPagesStyle.filterClearButton}
+                                        hitSlop={8}
+                                    >
+                                        <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                                    </Pressable>
+                                )}
+                            </View>
+
+                            {/* Roster Table */}
+                            {filteredStudents.length === 0 ? (
+                                <View style={myClassPagesStyle.emptyCard}>
+                                    <Ionicons
+                                        name="people-outline"
+                                        size={44}
+                                        color="#94A3B8"
+                                        style={myClassPagesStyle.emptyIcon}
+                                    />
+                                    <Text style={myClassPagesStyle.emptyText}>
+                                        {studentSearchQuery.trim()
+                                            ? `No students matching "${studentSearchQuery}"`
+                                            : "No students in this class yet"}
+                                    </Text>
+                                    <Text style={myClassPagesStyle.emptySubtext}>
+                                        {studentSearchQuery.trim()
+                                            ? "Try searching with a different spelling or name."
+                                            : "Add students manually or import an Excel spreadsheet to populate the roster."}
+                                    </Text>
+                                    {!studentSearchQuery.trim() && (
+                                        <Pressable
+                                            onPress={handleOpenAddStudent}
+                                            style={[myClassPagesStyle.addButton, { marginTop: 14, alignSelf: "center" }]}
+                                        >
+                                            <Ionicons name="person-add" size={16} color="#FFFFFF" />
+                                            <Text style={myClassPagesStyle.addButtonText}>Add First Student</Text>
+                                        </Pressable>
+                                    )}
+                                </View>
+                            ) : (
+                                <View style={myClassPagesStyle.tableCard}>
+                                    {/* Table Header */}
+                                    <View style={myClassPagesStyle.tableHeader}>
+                                        <Text style={[myClassPagesStyle.tableHeaderCell, myClassPagesStyle.tableCellIndex]}>
+                                            #
+                                        </Text>
+                                        <Pressable
+                                            onPress={toggleSort}
+                                            style={myClassPagesStyle.tableHeaderNameCell}
+                                            hitSlop={8}
+                                        >
+                                            <Text style={myClassPagesStyle.tableHeaderCell}>Student Name</Text>
+                                            <Ionicons
+                                                name={
+                                                    sortAsc === true
+                                                        ? "arrow-up"
+                                                        : sortAsc === false
+                                                        ? "arrow-down"
+                                                        : "swap-vertical"
+                                                }
+                                                size={13}
+                                                color="#64748B"
+                                            />
+                                        </Pressable>
+                                        <Text style={[myClassPagesStyle.tableHeaderCell, { width: 50, textAlign: "center" }]}>
+                                            Action
+                                        </Text>
+                                    </View>
+
+                                    {/* Table Rows */}
+                                    {filteredStudents.map((student, index) => {
+                                        const isEven = index % 2 === 0;
+                                        const initials = `${student.firstname[0] || ""}${student.lastname[0] || ""}`.toUpperCase();
+                                        const fullName = formatStudentName(student);
+
+                                        return (
+                                            <View
+                                                key={student.id}
+                                                style={[
+                                                    myClassPagesStyle.tableRow,
+                                                    isEven ? myClassPagesStyle.tableRowEven : myClassPagesStyle.tableRowOdd,
+                                                ]}
+                                            >
+                                                <Text style={myClassPagesStyle.tableCellIndex}>{index + 1}</Text>
+
+                                                <View style={myClassPagesStyle.avatar}>
+                                                    <Text style={myClassPagesStyle.avatarText}>{initials}</Text>
+                                                </View>
+
+                                                <View style={myClassPagesStyle.tableCellName}>
+                                                    <Text style={myClassPagesStyle.studentFullName} numberOfLines={1}>
+                                                        {fullName}
+                                                    </Text>
+                                                    {student.suffix && student.suffix !== "None" ? (
+                                                        <View style={myClassPagesStyle.suffixBadge}>
+                                                            <Text style={myClassPagesStyle.suffixBadgeText}>
+                                                                {student.suffix}
+                                                            </Text>
+                                                        </View>
+                                                    ) : null}
+                                                </View>
+
+                                                <Pressable
+                                                    onPress={() => handleRemoveStudent(student.id, fullName)}
+                                                    style={myClassPagesStyle.removeStudentBtn}
+                                                    hitSlop={8}
+                                                >
+                                                    <Ionicons name="trash-outline" size={17} color="#94A3B8" />
+                                                </Pressable>
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            )}
+                        </View>
+                    </>
+                )}
             </ScrollView>
 
-            {/* Single Student Add Modal */}
+            {/* =========================================================================
+                MODALS
+                ========================================================================= */}
+
+            {/* Create / Edit Class Modal */}
             <Modal
-                visible={isModalOpen}
+                visible={isClassModalOpen}
                 transparent
                 animationType="fade"
-                onRequestClose={() => setIsModalOpen(false)}
+                onRequestClose={() => setIsClassModalOpen(false)}
             >
                 <KeyboardAvoidingView
+                    behavior={Platform.OS === "ios" ? "padding" : "height"}
                     style={myClassPagesStyle.modalOverlay}
-                    behavior={Platform.OS === "ios" ? "padding" : undefined}
                 >
                     <View style={myClassPagesStyle.modalContent}>
                         <View style={myClassPagesStyle.modalHeader}>
-                            <Text style={myClassPagesStyle.modalTitle}>Add New Student</Text>
+                            <Text style={myClassPagesStyle.modalTitle}>
+                                {editingClass ? "Edit Class" : "Create New Class"}
+                            </Text>
+                            <Pressable onPress={() => setIsClassModalOpen(false)} hitSlop={8}>
+                                <Ionicons name="close" size={22} color="#64748B" />
+                            </Pressable>
+                        </View>
+
+                        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+                            <InputGroup
+                                label="Class Name *"
+                                placeholder="e.g. Mathematics 10, English 8"
+                                value={className}
+                                onChangeText={setClassName}
+                            />
+
+                            <InputGroup
+                                label="Section"
+                                placeholder="e.g. Diamond, Section A, Grade 10-A"
+                                value={classSection}
+                                onChangeText={setClassSection}
+                            />
+
+                            <InputGroup
+                                label="Subject"
+                                placeholder="e.g. Algebra & Trigonometry"
+                                value={classSubject}
+                                onChangeText={setClassSubject}
+                            />
+
+                            <InputGroup
+                                label="Room"
+                                placeholder="e.g. Room 302, Science Lab"
+                                value={classRoom}
+                                onChangeText={setClassRoom}
+                            />
+
+                            <InputGroup
+                                label="Schedule"
+                                placeholder="e.g. MWF 8:00 AM - 9:30 AM"
+                                value={classSchedule}
+                                onChangeText={setClassSchedule}
+                            />
+
+                            {/* Color Picker Chips */}
+                            <Text style={{ fontSize: 13, fontWeight: "600", color: "#334155", marginBottom: 8 }}>
+                                Card Color Theme
+                            </Text>
+                            <View style={myClassPagesStyle.colorPaletteRow}>
+                                {COLOR_PALETTE.map((c) => {
+                                    const isSelected = classColor === c;
+                                    return (
+                                        <Pressable
+                                            key={c}
+                                            onPress={() => setClassColor(c)}
+                                            style={[
+                                                myClassPagesStyle.colorChip,
+                                                { backgroundColor: c },
+                                                isSelected && myClassPagesStyle.colorChipSelected,
+                                            ]}
+                                        >
+                                            {isSelected && (
+                                                <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                                            )}
+                                        </Pressable>
+                                    );
+                                })}
+                            </View>
+
+                            <Button
+                                label={
+                                    isSubmittingClass
+                                        ? "Saving..."
+                                        : editingClass
+                                        ? "Save Changes"
+                                        : "Create Class"
+                                }
+                                onPress={isSubmittingClass ? undefined : handleSubmitClass}
+                            />
+
                             <Pressable
-                                onPress={() => setIsModalOpen(false)}
-                                hitSlop={8}
+                                onPress={() => setIsClassModalOpen(false)}
+                                style={myClassPagesStyle.cancelButton}
                             >
+                                <Text style={myClassPagesStyle.cancelButtonText}>Cancel</Text>
+                            </Pressable>
+                        </ScrollView>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
+
+            {/* Delete Class Confirmation Modal */}
+            <Modal
+                visible={deletingClass !== null}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setDeletingClass(null)}
+            >
+                <View style={myClassPagesStyle.modalOverlay}>
+                    <View style={myClassPagesStyle.modalContent}>
+                        <View style={myClassPagesStyle.modalHeader}>
+                            <Text style={[myClassPagesStyle.modalTitle, { color: "#EF4444" }]}>
+                                Delete Class
+                            </Text>
+                            <Pressable onPress={() => setDeletingClass(null)} hitSlop={8}>
+                                <Ionicons name="close" size={22} color="#64748B" />
+                            </Pressable>
+                        </View>
+
+                        <Text style={{ fontSize: 14, color: "#475569", lineHeight: 20, marginBottom: 16 }}>
+                            Are you sure you want to delete <Text style={{ fontWeight: "700" }}>{deletingClass?.name}</Text>?
+                            This will also remove this class association from its student roster, attendance sessions, and gradebook.
+                        </Text>
+
+                        <Pressable
+                            onPress={handleDeleteClass}
+                            disabled={isDeletingClass}
+                            style={[myClassPagesStyle.addButton, { backgroundColor: "#EF4444", justifyContent: "center" }]}
+                        >
+                            <Text style={myClassPagesStyle.addButtonText}>
+                                {isDeletingClass ? "Deleting..." : "Yes, Delete Class"}
+                            </Text>
+                        </Pressable>
+
+                        <Pressable
+                            onPress={() => setDeletingClass(null)}
+                            style={myClassPagesStyle.cancelButton}
+                        >
+                            <Text style={myClassPagesStyle.cancelButtonText}>Cancel</Text>
+                        </Pressable>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Add Student to Class Modal */}
+            <Modal
+                visible={isStudentModalOpen}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setIsStudentModalOpen(false)}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === "ios" ? "padding" : "height"}
+                    style={myClassPagesStyle.modalOverlay}
+                >
+                    <View style={myClassPagesStyle.modalContent}>
+                        <View style={myClassPagesStyle.modalHeader}>
+                            <Text style={myClassPagesStyle.modalTitle}>
+                                Add Student to {selectedClass?.name}
+                            </Text>
+                            <Pressable onPress={() => setIsStudentModalOpen(false)} hitSlop={8}>
                                 <Ionicons name="close" size={22} color="#64748B" />
                             </Pressable>
                         </View>
 
                         <ScrollView showsVerticalScrollIndicator={false}>
                             <InputGroup
-                                label="First Name"
-                                placeholder="Enter first name"
-                                value={form.firstname}
-                                onChangeText={(value) => setField("firstname", value)}
+                                label="First Name *"
+                                placeholder="e.g. Juan"
+                                value={studentForm.firstname}
+                                onChangeText={(v) => setStudentForm((p) => ({ ...p, firstname: v }))}
                             />
 
                             <InputGroup
-                                label="Middle Name (Optional)"
-                                placeholder="Enter middle name"
-                                value={form.middlename}
-                                onChangeText={(value) => setField("middlename", value)}
+                                label="Middle Name"
+                                placeholder="e.g. Protacio (optional)"
+                                value={studentForm.middlename || ""}
+                                onChangeText={(v) => setStudentForm((p) => ({ ...p, middlename: v }))}
                             />
 
                             <InputGroup
-                                label="Last Name"
-                                placeholder="Enter last name"
-                                value={form.lastname}
-                                onChangeText={(value) => setField("lastname", value)}
+                                label="Last Name *"
+                                placeholder="e.g. Dela Cruz"
+                                value={studentForm.lastname}
+                                onChangeText={(v) => setStudentForm((p) => ({ ...p, lastname: v }))}
                             />
 
                             <SelectGroup
                                 label="Suffix"
-                                value={form.suffix ?? "None"}
                                 options={SUFFIX_OPTIONS}
-                                onSelect={(value) => setField("suffix", value)}
-                                placeholder="Select suffix"
+                                value={studentForm.suffix || "None"}
+                                onSelect={(val: string) => setStudentForm((p) => ({ ...p, suffix: val }))}
                             />
 
                             <Button
-                                label={isSubmitting ? "Adding Student..." : "Save Student"}
-                                onPress={handleSubmitStudent}
+                                label={isSubmittingStudent ? "Adding Student..." : "Add to Class Roster"}
+                                onPress={isSubmittingStudent ? undefined : handleSubmitStudent}
                             />
 
                             <Pressable
-                                onPress={() => setIsModalOpen(false)}
+                                onPress={() => setIsStudentModalOpen(false)}
                                 style={myClassPagesStyle.cancelButton}
                             >
                                 <Text style={myClassPagesStyle.cancelButtonText}>Cancel</Text>
@@ -626,18 +1302,13 @@ export function MyClassPages() {
                 visible={isBulkModalOpen}
                 transparent
                 animationType="fade"
-                onRequestClose={() => {
-                    if (!isBulkLoading) setIsBulkModalOpen(false);
-                }}
+                onRequestClose={() => setIsBulkModalOpen(false)}
             >
                 <View style={myClassPagesStyle.modalOverlay}>
                     <View style={myClassPagesStyle.modalContent}>
                         <View style={myClassPagesStyle.modalHeader}>
-                            <Text style={myClassPagesStyle.modalTitle}>Bulk Import Preview</Text>
-                            <Pressable
-                                onPress={() => !isBulkLoading && setIsBulkModalOpen(false)}
-                                hitSlop={8}
-                            >
+                            <Text style={myClassPagesStyle.modalTitle}>Confirm Bulk Import</Text>
+                            <Pressable onPress={() => setIsBulkModalOpen(false)} hitSlop={8}>
                                 <Ionicons name="close" size={22} color="#64748B" />
                             </Pressable>
                         </View>
@@ -649,38 +1320,45 @@ export function MyClassPages() {
                                         📄 {bulkPreview.fileName}
                                     </Text>
                                     <Text style={myClassPagesStyle.previewStats}>
-                                        ✓ {bulkPreview.students.length} student records found
+                                        ✓ {bulkPreview.students.length} student
+                                        {bulkPreview.students.length > 1 ? "s" : ""} will be added to {selectedClass?.name}
                                     </Text>
                                     {bulkPreview.skippedCount > 0 && (
                                         <Text style={myClassPagesStyle.previewSkipped}>
-                                            ⚠ {bulkPreview.skippedCount} rows skipped (missing first/last name)
+                                            ⚠ {bulkPreview.skippedCount} row
+                                            {bulkPreview.skippedCount > 1 ? "s" : ""} skipped (missing first or last name)
                                         </Text>
                                     )}
 
                                     <Text style={myClassPagesStyle.previewListTitle}>
-                                        Sample Preview (first {Math.min(5, bulkPreview.students.length)}):
+                                        Preview (first {Math.min(5, bulkPreview.students.length)} students):
                                     </Text>
-                                    {bulkPreview.students.slice(0, 5).map((item, idx) => (
+                                    {bulkPreview.students.slice(0, 5).map((s, idx) => (
                                         <View key={idx} style={myClassPagesStyle.previewItem}>
-                                            <Ionicons name="checkmark" size={14} color="#16A34A" />
+                                            <Ionicons name="person-outline" size={13} color="#64748B" />
                                             <Text style={myClassPagesStyle.previewItemText}>
-                                                {formatStudentName(item)}
+                                                {formatStudentName(s)}
                                             </Text>
                                         </View>
                                     ))}
+                                    {bulkPreview.students.length > 5 && (
+                                        <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 4, fontStyle: "italic" }}>
+                                            ...and {bulkPreview.students.length - 5} more
+                                        </Text>
+                                    )}
                                 </View>
 
                                 <Button
                                     label={
                                         isBulkLoading
-                                            ? "Importing Students..."
+                                            ? "Importing..."
                                             : `Import ${bulkPreview.students.length} Students`
                                     }
-                                    onPress={handleConfirmBulkImport}
+                                    onPress={isBulkLoading ? undefined : handleConfirmBulkImport}
                                 />
 
                                 <Pressable
-                                    onPress={() => !isBulkLoading && setIsBulkModalOpen(false)}
+                                    onPress={() => setIsBulkModalOpen(false)}
                                     style={myClassPagesStyle.cancelButton}
                                 >
                                     <Text style={myClassPagesStyle.cancelButtonText}>Cancel</Text>
@@ -691,6 +1369,7 @@ export function MyClassPages() {
                 </View>
             </Modal>
 
+            {/* Dialog Message */}
             <DialogMessage
                 visible={dialog.visible}
                 type={dialog.type}

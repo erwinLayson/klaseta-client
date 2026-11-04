@@ -1,6 +1,7 @@
 export interface GradingWeight {
     id: number;
     teacherId: number;
+    classId?: number | null;
     name: string;
     weight: number; // Percentage e.g. 30, 40, 50
     createdAt?: string;
@@ -9,6 +10,7 @@ export interface GradingWeight {
 export interface Assessment {
     id: number;
     teacherId: number;
+    classId?: number | null;
     weightId?: number | null;
     weightName?: string;
     weightPercent?: number;
@@ -30,6 +32,7 @@ export interface CreateAssessmentInput {
     maxScore: number;
     date: string;
     weightId?: number | null;
+    classId?: number;
 }
 
 export interface UpdateAssessmentInput {
@@ -38,11 +41,13 @@ export interface UpdateAssessmentInput {
     maxScore: number;
     date: string;
     weightId?: number | null;
+    classId?: number;
 }
 
 export interface CreateGradingWeightInput {
     name: string;
     weight: number;
+    classId?: number;
 }
 
 export interface GradebookSpreadsheetData {

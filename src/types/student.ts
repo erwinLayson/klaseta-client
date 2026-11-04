@@ -7,6 +7,7 @@ export interface Student {
     suffix: string | null;
     email: string | null;
     teacherId: number;
+    classId?: number | null;
 }
 
 export interface AddStudentInput {
@@ -14,5 +15,7 @@ export interface AddStudentInput {
     middlename?: string;
     lastname: string;
     suffix?: string;
+    classId?: number;
 }
+
 

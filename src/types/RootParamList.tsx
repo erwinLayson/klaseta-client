@@ -2,8 +2,8 @@ export type RootParamList = {
     login: undefined;
     register: undefined;
     dashboard: { username: string };
-    myclass: { username: string };
-    attendance: { username: string };
-    gradebook: { username: string };
+    myclass: { username: string; classId?: number };
+    attendance: { username: string; classId?: number };
+    gradebook: { username: string; classId?: number };
     settings: { username: string };
 };

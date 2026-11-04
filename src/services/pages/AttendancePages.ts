@@ -20,7 +20,8 @@ export function normalizeAttendanceValue(value: string | null | undefined): "1" 
 export async function createAttendanceSession(
     username: string,
     date: string,
-    title?: string
+    title?: string,
+    classId?: number | null
 ): Promise<{ success: boolean; message: string; sessionId?: number }> {
     if (!date.trim()) {
         return { success: false, message: "Date is required." };
@@ -44,17 +45,25 @@ export async function createAttendanceSession(
 
         await db.withTransactionAsync(async () => {
             const insertResult = await db.runAsync(
-                "INSERT INTO attendance_sessions (date, title, teacherId) VALUES (?, ?, ?)",
-                [date.trim(), sessionTitle, teacher.id]
+                "INSERT INTO attendance_sessions (date, title, teacherId, classId) VALUES (?, ?, ?, ?)",
+                [date.trim(), sessionTitle, teacher.id, classId ?? null]
             );
 
             newSessionId = insertResult.lastInsertRowId;
 
-            // Fetch all current students for this teacher
-            const students = await db.getAllAsync<{ id: number }>(
-                "SELECT id FROM students WHERE teacherId = ?",
-                [teacher.id]
-            );
+            // Fetch students to pre-populate:
+            // If classId is specified, fetch students enrolled in this class; otherwise all teacher students
+            const students = classId
+                ? await db.getAllAsync<{ id: number }>(
+                      `SELECT s.id FROM students s
+                       JOIN class_students cs ON cs.studentId = s.id
+                       WHERE cs.classId = ?`,
+                      [classId]
+                  )
+                : await db.getAllAsync<{ id: number }>(
+                      "SELECT id FROM students WHERE teacherId = ?",
+                      [teacher.id]
+                  );
 
             // Pre-populate each student as "1" (present) by default
             for (const student of students) {
@@ -77,7 +86,8 @@ export async function createAttendanceSession(
 }
 
 export async function getAttendanceSpreadsheet(
-    username: string
+    username: string,
+    classId?: number | null
 ): Promise<AttendanceSpreadsheet> {
     try {
         const db = await getDatabase();
@@ -91,15 +101,30 @@ export async function getAttendanceSpreadsheet(
             return { students: [], sessions: [], recordsMap: {} };
         }
 
-        const students = await db.getAllAsync<Student>(
-            "SELECT * FROM students WHERE teacherId = ? ORDER BY lastname ASC, firstname ASC",
-            [teacher.id]
-        );
+        const students = classId
+            ? await db.getAllAsync<Student>(
+                  `SELECT s.* FROM students s
+                   JOIN class_students cs ON cs.studentId = s.id
+                   WHERE cs.classId = ?
+                   ORDER BY s.lastname ASC, s.firstname ASC`,
+                  [classId]
+              )
+            : await db.getAllAsync<Student>(
+                  "SELECT * FROM students WHERE teacherId = ? ORDER BY lastname ASC, firstname ASC",
+                  [teacher.id]
+              );
 
-        const sessions = await db.getAllAsync<AttendanceSession>(
-            "SELECT * FROM attendance_sessions WHERE teacherId = ? ORDER BY date DESC, id DESC",
-            [teacher.id]
-        );
+        const sessions = classId
+            ? await db.getAllAsync<AttendanceSession>(
+                  `SELECT * FROM attendance_sessions 
+                   WHERE teacherId = ? AND (classId = ? OR classId IS NULL) 
+                   ORDER BY date DESC, id DESC`,
+                  [teacher.id, classId]
+              )
+            : await db.getAllAsync<AttendanceSession>(
+                  "SELECT * FROM attendance_sessions WHERE teacherId = ? ORDER BY date DESC, id DESC",
+                  [teacher.id]
+              );
 
         const records = await db.getAllAsync<AttendanceRecord>(
             `SELECT ar.* FROM attendance_records ar
