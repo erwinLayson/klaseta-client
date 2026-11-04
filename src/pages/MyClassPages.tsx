@@ -87,8 +87,18 @@ export function MyClassPages() {
     }, [username]);
 
     useEffect(() => {
-        loadStudents();
-    }, [loadStudents]);
+        let isMounted = true;
+        const fetchStudents = async () => {
+            const list = await getStudentsByTeacher(username);
+            if (isMounted) {
+                setStudents(list);
+            }
+        };
+        fetchStudents();
+        return () => {
+            isMounted = false;
+        };
+    }, [username]);
 
     const handleTabPress = (tab: NavTab) => {
         if (tab !== "myclass") {
