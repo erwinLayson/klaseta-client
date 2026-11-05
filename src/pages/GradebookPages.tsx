@@ -335,6 +335,10 @@ export function GradebookPages() {
             { label: "No Specific Category", value: "NONE" },
         ];
         for (const w of weights) {
+            // Exclude attendance category from assessment options since attendance is tracked on a separate page
+            if (w.name.trim().toLowerCase().includes("attendance")) {
+                continue;
+            }
             list.push({
                 label: `${w.name} (${w.weight}%)`,
                 value: String(w.id),
@@ -349,7 +353,12 @@ export function GradebookPages() {
         setAssessmentTitle("");
         setAssessmentMaxScore("50");
         setAssessmentDate(getTodayDateString());
-        setAssessmentWeightId(weights.length > 0 ? String(weights[0].id) : "NONE");
+        const nonAttendanceWeights = weights.filter(
+            (w) => !w.name.trim().toLowerCase().includes("attendance")
+        );
+        setAssessmentWeightId(
+            nonAttendanceWeights.length > 0 ? String(nonAttendanceWeights[0].id) : "NONE"
+        );
         setIsAssessmentModalOpen(true);
     };
 
