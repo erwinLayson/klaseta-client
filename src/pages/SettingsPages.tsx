@@ -32,6 +32,11 @@ import {
     type UserProfileInfo,
 } from "../services/pages/SettingsPages";
 import { markSchoolYearAsCompleted } from "../services/pages/AcademicHistoryPages";
+import {
+    startNewSchoolYear,
+    getAllSchoolYears,
+    type SchoolYearItem,
+} from "../services/pages/SchoolYearService";
 
 export function SettingsPages() {
     const navigation = useNavigation<NativeStackNavigationProp<RootParamList>>();
@@ -58,6 +63,16 @@ export function SettingsPages() {
     const [isConfirmCompleteModalOpen, setIsConfirmCompleteModalOpen] = useState(false);
     const [nextSchoolYearInput, setNextSchoolYearInput] = useState("");
     const [isCompletingYear, setIsCompletingYear] = useState(false);
+
+    // Start New School Year State
+    const [isStartYearModalOpen, setIsStartYearModalOpen] = useState(false);
+    const [isStartingYear, setIsStartingYear] = useState(false);
+    const [startYearInput, setStartYearInput] = useState("");
+    const [startSemesterInput, setStartSemesterInput] = useState("1st Semester");
+    const [startQuarterCountInput, setStartQuarterCountInput] = useState<number>(4);
+    const [startArchivePrevious, setStartArchivePrevious] = useState(true);
+    const [startCopyWeights, setStartCopyWeights] = useState(true);
+    const [schoolYearsList, setSchoolYearsList] = useState<SchoolYearItem[]>([]);
 
     // Credentials / Password Form State
     const [currentPassword, setCurrentPassword] = useState("");
@@ -94,9 +109,10 @@ export function SettingsPages() {
         const loadProfile = async () => {
             setIsLoadingProfile(true);
             try {
-                const [info, academic] = await Promise.all([
+                const [info, academic, years] = await Promise.all([
                     getUserProfile(currentUsername),
                     getAcademicSettings(currentUsername),
+                    getAllSchoolYears(currentUsername),
                 ]);
 
                 if (isMounted) {
@@ -112,6 +128,9 @@ export function SettingsPages() {
                         setPassingScore(String(academic.passingScore));
                         setQuarterCount(academic.quarterCount === 3 ? 3 : 4);
                         setAcademicStatus(academic.status || "active");
+                    }
+                    if (years) {
+                        setSchoolYearsList(years);
                     }
                 }
             } finally {
@@ -321,6 +340,84 @@ export function SettingsPages() {
             }
         } finally {
             setIsCompletingYear(false);
+        }
+    };
+
+    const handleOpenStartYearModal = () => {
+        const match = academicYear.match(/^(\d{4})-(\d{4})$/);
+        if (match) {
+            const start = parseInt(match[1], 10);
+            const end = parseInt(match[2], 10);
+            setStartYearInput(`${start + 1}-${end + 1}`);
+        } else {
+            setStartYearInput("");
+        }
+        setStartSemesterInput("1st Semester");
+        setStartQuarterCountInput(quarterCount);
+        setStartArchivePrevious(academicStatus === "active");
+        setStartCopyWeights(true);
+        setIsStartYearModalOpen(true);
+    };
+
+    const handleConfirmStartYear = async () => {
+        if (isStartingYear) return;
+
+        const trimmedYear = startYearInput.trim();
+        if (!trimmedYear) {
+            setDialog({
+                visible: true,
+                type: "error",
+                title: "Missing School Year",
+                message: "Please enter the school year (e.g. 2025-2026).",
+            });
+            return;
+        }
+
+        setIsStartingYear(true);
+        try {
+            const res = await startNewSchoolYear(currentUsername, {
+                schoolYear: trimmedYear,
+                semester: startSemesterInput,
+                quarterCount: startQuarterCountInput,
+                archivePreviousIfActive: startArchivePrevious,
+                copyGradingWeights: startCopyWeights,
+            });
+
+            if (res.success) {
+                setIsStartYearModalOpen(false);
+                const [updatedAcademic, updatedYears] = await Promise.all([
+                    getAcademicSettings(currentUsername),
+                    getAllSchoolYears(currentUsername),
+                ]);
+
+                if (updatedAcademic) {
+                    setAcademicYear(updatedAcademic.academicYear);
+                    setActiveQuarter(updatedAcademic.activeQuarter);
+                    setSemester(updatedAcademic.semester);
+                    setPassingScore(String(updatedAcademic.passingScore));
+                    setQuarterCount(updatedAcademic.quarterCount === 3 ? 3 : 4);
+                    setAcademicStatus(updatedAcademic.status || "active");
+                }
+                if (updatedYears) {
+                    setSchoolYearsList(updatedYears);
+                }
+
+                setDialog({
+                    visible: true,
+                    type: "success",
+                    title: "New School Year Started",
+                    message: res.message,
+                });
+            } else {
+                setDialog({
+                    visible: true,
+                    type: "error",
+                    title: "Cannot Start School Year",
+                    message: res.message,
+                });
+            }
+        } finally {
+            setIsStartingYear(false);
         }
     };
 
@@ -749,6 +846,20 @@ export function SettingsPages() {
 
                             {/* Additional Academic Actions */}
                             <View style={settingsPagesStyle.academicActionsContainer}>
+                                {/* Start New School Year Button */}
+                                <Pressable
+                                    style={({ pressed }) => [
+                                        settingsPagesStyle.startYearButton,
+                                        pressed && settingsPagesStyle.startYearButtonPressed,
+                                    ]}
+                                    onPress={handleOpenStartYearModal}
+                                >
+                                    <Ionicons name="sparkles" size={18} color="#FFFFFF" />
+                                    <Text style={settingsPagesStyle.startYearButtonText}>
+                                        Start New School Year
+                                    </Text>
+                                </Pressable>
+
                                 {/* Mark School Year as Completed Button */}
                                 <Pressable
                                     style={({ pressed }) => [
@@ -1109,6 +1220,199 @@ export function SettingsPages() {
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
+
+            {/* Start New School Year Modal */}
+            <Modal
+                visible={isStartYearModalOpen}
+                transparent
+                animationType="fade"
+                onRequestClose={() => {
+                    if (!isStartingYear) setIsStartYearModalOpen(false);
+                }}
+            >
+                <View style={settingsPagesStyle.modalOverlay}>
+                    <View style={settingsPagesStyle.startModalContent}>
+                        <ScrollView showsVerticalScrollIndicator={false}>
+                            <View style={settingsPagesStyle.startModalIconBox}>
+                                <Ionicons name="sparkles" size={28} color="#059669" />
+                            </View>
+                            <Text style={settingsPagesStyle.startModalTitle}>
+                                Start New School Year
+                            </Text>
+                            <Text style={settingsPagesStyle.startModalSubtitle}>
+                                Activate a new school year with clean operational classes, attendance sheets, and gradebook records while keeping past records safe in Academic History.
+                            </Text>
+
+                            {/* Active Year Warning Notice */}
+                            {academicStatus === "active" && (
+                                <View style={settingsPagesStyle.startNoticeBox}>
+                                    <Ionicons name="information-circle" size={18} color="#D97706" />
+                                    <Text style={settingsPagesStyle.startNoticeText}>
+                                        Current School Year ({academicYear}) is still Active. Starting a new school year will complete and archive its grades into Academic History.
+                                    </Text>
+                                </View>
+                            )}
+
+                            {/* School Year Input */}
+                            <View style={settingsPagesStyle.formGroup}>
+                                <Text style={settingsPagesStyle.formLabel}>New School Year</Text>
+                                <View
+                                    style={[
+                                        settingsPagesStyle.inputContainer,
+                                        focusedInput === "startYear" && settingsPagesStyle.inputContainerFocused,
+                                    ]}
+                                >
+                                    <Ionicons
+                                        name="calendar-outline"
+                                        size={18}
+                                        color={focusedInput === "startYear" ? "#4F46E5" : "#94A3B8"}
+                                        style={settingsPagesStyle.inputIconLeft}
+                                    />
+                                    <TextInput
+                                        style={settingsPagesStyle.input}
+                                        placeholder="e.g. 2025-2026"
+                                        placeholderTextColor="#94A3B8"
+                                        value={startYearInput}
+                                        onChangeText={setStartYearInput}
+                                        onFocus={() => setFocusedInput("startYear")}
+                                        onBlur={() => setFocusedInput(null)}
+                                    />
+                                </View>
+                            </View>
+
+                            {/* Semester Selection */}
+                            <View style={settingsPagesStyle.formGroup}>
+                                <Text style={settingsPagesStyle.formLabel}>Semester / Term</Text>
+                                <View style={settingsPagesStyle.pillSelectorRow}>
+                                    {["1st Semester", "2nd Semester", "Summer"].map((semOption) => {
+                                        const isActive = startSemesterInput === semOption;
+                                        return (
+                                            <Pressable
+                                                key={semOption}
+                                                style={[
+                                                    settingsPagesStyle.pillButton,
+                                                    isActive && settingsPagesStyle.pillButtonActive,
+                                                ]}
+                                                onPress={() => setStartSemesterInput(semOption)}
+                                            >
+                                                <Text
+                                                    style={[
+                                                        settingsPagesStyle.pillButtonText,
+                                                        isActive && settingsPagesStyle.pillButtonTextActive,
+                                                    ]}
+                                                >
+                                                    {semOption}
+                                                </Text>
+                                            </Pressable>
+                                        );
+                                    })}
+                                </View>
+                            </View>
+
+                            {/* Quarter Count */}
+                            <View style={settingsPagesStyle.formGroup}>
+                                <Text style={settingsPagesStyle.formLabel}>Grading Period System</Text>
+                                <View style={settingsPagesStyle.pillSelectorRow}>
+                                    {[
+                                        { count: 3, label: "3 Quarters (Q1 - Q3)" },
+                                        { count: 4, label: "4 Quarters (Q1 - Q4)" },
+                                    ].map((item) => {
+                                        const isActive = startQuarterCountInput === item.count;
+                                        return (
+                                            <Pressable
+                                                key={item.count}
+                                                style={[
+                                                    settingsPagesStyle.pillButton,
+                                                    isActive && settingsPagesStyle.pillButtonActive,
+                                                ]}
+                                                onPress={() => setStartQuarterCountInput(item.count)}
+                                            >
+                                                <Text
+                                                    style={[
+                                                        settingsPagesStyle.pillButtonText,
+                                                        isActive && settingsPagesStyle.pillButtonTextActive,
+                                                    ]}
+                                                >
+                                                    {item.label}
+                                                </Text>
+                                            </Pressable>
+                                        );
+                                    })}
+                                </View>
+                            </View>
+
+                            {/* Option 1: Archive current year if active */}
+                            {academicStatus === "active" && (
+                                <Pressable
+                                    style={settingsPagesStyle.startOptionRow}
+                                    onPress={() => setStartArchivePrevious(!startArchivePrevious)}
+                                >
+                                    <Ionicons
+                                        name={startArchivePrevious ? "checkbox" : "square-outline"}
+                                        size={22}
+                                        color={startArchivePrevious ? "#059669" : "#94A3B8"}
+                                    />
+                                    <View style={settingsPagesStyle.startOptionTextContainer}>
+                                        <Text style={settingsPagesStyle.startOptionTitle}>
+                                            Archive current school year
+                                        </Text>
+                                        <Text style={settingsPagesStyle.startOptionSubtitle}>
+                                            Save student final marks and attendance to Academic History.
+                                        </Text>
+                                    </View>
+                                </Pressable>
+                            )}
+
+                            {/* Option 2: Copy grading weights */}
+                            <Pressable
+                                style={settingsPagesStyle.startOptionRow}
+                                onPress={() => setStartCopyWeights(!startCopyWeights)}
+                            >
+                                <Ionicons
+                                    name={startCopyWeights ? "checkbox" : "square-outline"}
+                                    size={22}
+                                    color={startCopyWeights ? "#059669" : "#94A3B8"}
+                                />
+                                <View style={settingsPagesStyle.startOptionTextContainer}>
+                                    <Text style={settingsPagesStyle.startOptionTitle}>
+                                        Initialize standard grading weights
+                                    </Text>
+                                    <Text style={settingsPagesStyle.startOptionSubtitle}>
+                                        Pre-populate standard weight categories (Written, Performance, Exam).
+                                    </Text>
+                                </View>
+                            </Pressable>
+
+                            {/* Confirm Button */}
+                            <Pressable
+                                disabled={isStartingYear}
+                                onPress={handleConfirmStartYear}
+                                style={({ pressed }) => [
+                                    settingsPagesStyle.startConfirmButton,
+                                    pressed && settingsPagesStyle.startConfirmButtonPressed,
+                                ]}
+                            >
+                                {isStartingYear ? (
+                                    <ActivityIndicator size="small" color="#FFFFFF" />
+                                ) : (
+                                    <Text style={settingsPagesStyle.startConfirmButtonText}>
+                                        Confirm & Start School Year
+                                    </Text>
+                                )}
+                            </Pressable>
+
+                            {/* Cancel Button */}
+                            <Pressable
+                                disabled={isStartingYear}
+                                onPress={() => setIsStartYearModalOpen(false)}
+                                style={settingsPagesStyle.completeCancelButton}
+                            >
+                                <Text style={settingsPagesStyle.completeCancelButtonText}>Cancel</Text>
+                            </Pressable>
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
 
             {/* Mark School Year as Completed Modal */}
             <Modal

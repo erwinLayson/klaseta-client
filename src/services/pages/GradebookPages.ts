@@ -7,6 +7,7 @@ import type {
     UpdateAssessmentInput,
     GradebookSpreadsheetData,
 } from "../../types/gradebook";
+import { getActiveSchoolYear } from "./SchoolYearService";
 
 const DEFAULT_WEIGHTS = [
     { name: "Attendance", weight: 10 },
@@ -28,25 +29,31 @@ export async function getGradingWeights(
 
         if (!teacher) return [];
 
+        const activeYear = await getActiveSchoolYear(username);
+        const schoolYearId = activeYear?.id ?? null;
+
         let weights = classId
             ? await db.getAllAsync<GradingWeight>(
                   `SELECT * FROM grading_weights 
                    WHERE teacherId = ? AND (classId = ? OR classId IS NULL) 
+                     AND (school_year_id = ? OR school_year_id IS NULL)
                    ORDER BY id ASC`,
-                  [teacher.id, classId]
+                  [teacher.id, classId, schoolYearId]
               )
             : await db.getAllAsync<GradingWeight>(
-                  "SELECT * FROM grading_weights WHERE teacherId = ? ORDER BY id ASC",
-                  [teacher.id]
+                  `SELECT * FROM grading_weights 
+                   WHERE teacherId = ? AND (school_year_id = ? OR school_year_id IS NULL) 
+                   ORDER BY id ASC`,
+                  [teacher.id, schoolYearId]
               );
 
-        // Auto-seed default weights if none exist yet for this teacher
+        // Auto-seed default weights if none exist yet for this teacher and school year
         if (!weights || weights.length === 0) {
             await db.withTransactionAsync(async () => {
                 for (const w of DEFAULT_WEIGHTS) {
                     await db.runAsync(
-                        "INSERT INTO grading_weights (teacherId, name, weight, classId) VALUES (?, ?, ?, ?)",
-                        [teacher.id, w.name, w.weight, classId ?? null]
+                        "INSERT INTO grading_weights (teacherId, name, weight, classId, school_year_id) VALUES (?, ?, ?, ?, ?)",
+                        [teacher.id, w.name, w.weight, classId ?? null, schoolYearId]
                     );
                 }
             });
@@ -55,12 +62,15 @@ export async function getGradingWeights(
                 ? await db.getAllAsync<GradingWeight>(
                       `SELECT * FROM grading_weights 
                        WHERE teacherId = ? AND (classId = ? OR classId IS NULL) 
+                         AND (school_year_id = ? OR school_year_id IS NULL)
                        ORDER BY id ASC`,
-                      [teacher.id, classId]
+                      [teacher.id, classId, schoolYearId]
                   )
                 : await db.getAllAsync<GradingWeight>(
-                      "SELECT * FROM grading_weights WHERE teacherId = ? ORDER BY id ASC",
-                      [teacher.id]
+                      `SELECT * FROM grading_weights 
+                       WHERE teacherId = ? AND (school_year_id = ? OR school_year_id IS NULL) 
+                       ORDER BY id ASC`,
+                      [teacher.id, schoolYearId]
                   );
         }
 
@@ -95,9 +105,12 @@ export async function createGradingWeight(
             return { success: false, message: "Teacher account not found." };
         }
 
+        const activeYear = await getActiveSchoolYear(username);
+        const schoolYearId = activeYear?.id ?? null;
+
         const result = await db.runAsync(
-            "INSERT INTO grading_weights (teacherId, name, weight, classId) VALUES (?, ?, ?, ?)",
-            [teacher.id, name.trim(), weight, classId ?? null]
+            "INSERT INTO grading_weights (teacherId, name, weight, classId, school_year_id) VALUES (?, ?, ?, ?, ?)",
+            [teacher.id, name.trim(), weight, classId ?? null, schoolYearId]
         );
 
         return {
@@ -150,10 +163,12 @@ export async function createAssessment(
         }
 
         const quarter = input.quarter?.trim() || "Q1";
+        const activeYear = await getActiveSchoolYear(username);
+        const schoolYearId = input.school_year_id ?? activeYear?.id ?? null;
 
         const result = await db.runAsync(
-            `INSERT INTO assessments (teacherId, weightId, title, maxScore, date, classId, quarter)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO assessments (teacherId, weightId, title, maxScore, date, classId, quarter, school_year_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 teacher.id,
                 input.weightId ?? null,
@@ -162,6 +177,7 @@ export async function createAssessment(
                 input.date.trim(),
                 input.classId ?? null,
                 quarter,
+                schoolYearId,
             ]
         );
 
@@ -255,6 +271,8 @@ export async function getGradebookSpreadsheet(
               );
 
         const weights = await getGradingWeights(username, classId);
+        const activeYear = await getActiveSchoolYear(username);
+        const schoolYearId = activeYear?.id ?? null;
 
         const assessmentsRaw = classId
             ? await db.getAllAsync<{
@@ -272,8 +290,9 @@ export async function getGradebookSpreadsheet(
                    FROM assessments a
                    LEFT JOIN grading_weights w ON a.weightId = w.id
                    WHERE a.teacherId = ? AND (a.classId = ? OR a.classId IS NULL)
+                     AND (a.school_year_id = ? OR a.school_year_id IS NULL)
                    ORDER BY a.date DESC, a.id DESC`,
-                  [teacher.id, classId]
+                  [teacher.id, classId, schoolYearId]
               )
             : await db.getAllAsync<{
                   id: number;
@@ -290,8 +309,9 @@ export async function getGradebookSpreadsheet(
                    FROM assessments a
                    LEFT JOIN grading_weights w ON a.weightId = w.id
                    WHERE a.teacherId = ?
+                     AND (a.school_year_id = ? OR a.school_year_id IS NULL)
                    ORDER BY a.date DESC, a.id DESC`,
-                  [teacher.id]
+                  [teacher.id, schoolYearId]
               );
 
         const assessments: Assessment[] = (assessmentsRaw ?? []).map((row) => ({
@@ -324,19 +344,19 @@ export async function getGradebookSpreadsheet(
             scoresMap[`${s.studentId}_${s.assessmentId}`] = String(s.score);
         }
 
-        // Fetch total attendance sessions for teacher & class (strictly guarded to classId)
+        // Fetch total attendance sessions for teacher & class (strictly guarded to classId & school_year_id)
         const totalSessionsResult = classId
             ? await db.getFirstAsync<{ count: number }>(
-                  "SELECT COUNT(*) as count FROM attendance_sessions WHERE teacherId = ? AND classId = ?",
-                  [teacher.id, classId]
+                  "SELECT COUNT(*) as count FROM attendance_sessions WHERE teacherId = ? AND classId = ? AND (school_year_id = ? OR school_year_id IS NULL)",
+                  [teacher.id, classId, schoolYearId]
               )
             : await db.getFirstAsync<{ count: number }>(
-                  "SELECT COUNT(*) as count FROM attendance_sessions WHERE teacherId = ?",
-                  [teacher.id]
+                  "SELECT COUNT(*) as count FROM attendance_sessions WHERE teacherId = ? AND (school_year_id = ? OR school_year_id IS NULL)",
+                  [teacher.id, schoolYearId]
               );
         const totalAttendanceSessions = totalSessionsResult?.count ?? 0;
 
-        // Fetch present count per student (strictly guarded to classId)
+        // Fetch present count per student (strictly guarded to classId & school_year_id)
         const attendanceRows = classId
             ? await db.getAllAsync<{
                   studentId: number;
@@ -345,9 +365,11 @@ export async function getGradebookSpreadsheet(
                   `SELECT ar.studentId, COUNT(*) as presentCount
                    FROM attendance_records ar
                    JOIN attendance_sessions s ON ar.sessionId = s.id
-                   WHERE s.teacherId = ? AND s.classId = ? AND (ar.status = '1' OR ar.status = 'present')
+                   WHERE s.teacherId = ? AND s.classId = ? 
+                     AND (s.school_year_id = ? OR s.school_year_id IS NULL)
+                     AND (ar.status = '1' OR ar.status = 'present')
                    GROUP BY ar.studentId`,
-                  [teacher.id, classId]
+                  [teacher.id, classId, schoolYearId]
               )
             : await db.getAllAsync<{
                   studentId: number;
@@ -356,9 +378,11 @@ export async function getGradebookSpreadsheet(
                   `SELECT ar.studentId, COUNT(*) as presentCount
                    FROM attendance_records ar
                    JOIN attendance_sessions s ON ar.sessionId = s.id
-                   WHERE s.teacherId = ? AND (ar.status = '1' OR ar.status = 'present')
+                   WHERE s.teacherId = ? 
+                     AND (s.school_year_id = ? OR s.school_year_id IS NULL)
+                     AND (ar.status = '1' OR ar.status = 'present')
                    GROUP BY ar.studentId`,
-                  [teacher.id]
+                  [teacher.id, schoolYearId]
               );
 
         const attendanceMap: Record<number, { present: number; total: number; percentage: number }> = {};

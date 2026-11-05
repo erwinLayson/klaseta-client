@@ -1,6 +1,7 @@
 import { getDatabase } from "../database/connection";
 import type { Student } from "../../types/student";
 import type { AttendanceSession, AttendanceRecord } from "../../types/attendance";
+import { getActiveSchoolYear } from "./SchoolYearService";
 
 export interface AttendanceSpreadsheet {
     students: Student[];
@@ -56,10 +57,12 @@ export async function createAttendanceSession(
 
         const sessionTitle = title?.trim() ? title.trim() : null;
         const sessionQuarter = quarter?.trim() ? quarter.trim() : "Q1";
+        const activeYear = await getActiveSchoolYear(username);
+        const schoolYearId = activeYear?.id ?? null;
 
         const insertResult = await db.runAsync(
-            "INSERT INTO attendance_sessions (date, title, teacherId, classId, quarter) VALUES (?, ?, ?, ?, ?)",
-            [date.trim(), sessionTitle, teacher.id, classId, sessionQuarter]
+            "INSERT INTO attendance_sessions (date, title, teacherId, classId, quarter, school_year_id) VALUES (?, ?, ?, ?, ?, ?)",
+            [date.trim(), sessionTitle, teacher.id, classId, sessionQuarter, schoolYearId]
         );
 
         const newSessionId = insertResult.lastInsertRowId;
@@ -104,12 +107,28 @@ export async function getAttendanceSpreadsheet(
                   [teacher.id]
               );
 
+        const activeYear = await getActiveSchoolYear(username);
+
         const sessions = classId
+            ? activeYear
+                ? await db.getAllAsync<AttendanceSession>(
+                      `SELECT * FROM attendance_sessions 
+                       WHERE teacherId = ? AND classId = ? AND (school_year_id = ? OR school_year_id IS NULL)
+                       ORDER BY date DESC, id DESC`,
+                      [teacher.id, classId, activeYear.id]
+                  )
+                : await db.getAllAsync<AttendanceSession>(
+                      `SELECT * FROM attendance_sessions 
+                       WHERE teacherId = ? AND classId = ? 
+                       ORDER BY date DESC, id DESC`,
+                      [teacher.id, classId]
+                  )
+            : activeYear
             ? await db.getAllAsync<AttendanceSession>(
                   `SELECT * FROM attendance_sessions 
-                   WHERE teacherId = ? AND classId = ? 
+                   WHERE teacherId = ? AND (school_year_id = ? OR school_year_id IS NULL)
                    ORDER BY date DESC, id DESC`,
-                  [teacher.id, classId]
+                  [teacher.id, activeYear.id]
               )
             : await db.getAllAsync<AttendanceSession>(
                   "SELECT * FROM attendance_sessions WHERE teacherId = ? ORDER BY date DESC, id DESC",

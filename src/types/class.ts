@@ -7,6 +7,7 @@ export interface ClassItem {
     room?: string | null;
     schedule?: string | null;
     color?: string | null;
+    school_year_id?: number | null;
     createdAt?: string;
     studentCount?: number;
 }
@@ -18,6 +19,7 @@ export interface CreateClassInput {
     room?: string;
     schedule?: string;
     color?: string;
+    school_year_id?: number;
 }
 
 export interface UpdateClassInput {

@@ -3,6 +3,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { getDatabase } from "../database/connection";
 import type { Student, AddStudentInput } from "../../types/student";
 import type { ClassItem, CreateClassInput, UpdateClassInput } from "../../types/class";
+import { getActiveSchoolYear } from "./SchoolYearService";
 
 export type StudentResult = {
     success: boolean;
@@ -546,14 +547,28 @@ export async function getClassesByTeacher(username: string): Promise<ClassItem[]
 
         if (!teacher) return [];
 
-        const classes = await db.getAllAsync<ClassItem>(
-            `SELECT c.*, 
-                (SELECT COUNT(*) FROM class_students cs WHERE cs.classId = c.id) AS studentCount
-             FROM classes c
-             WHERE c.teacherId = ?
-             ORDER BY c.id DESC`,
-            [teacher.id]
-        );
+        const activeYear = await getActiveSchoolYear(username);
+        let classes: ClassItem[] = [];
+
+        if (activeYear) {
+            classes = await db.getAllAsync<ClassItem>(
+                `SELECT c.*, 
+                    (SELECT COUNT(*) FROM class_students cs WHERE cs.classId = c.id) AS studentCount
+                 FROM classes c
+                 WHERE c.teacherId = ? AND (c.school_year_id = ? OR c.school_year_id IS NULL)
+                 ORDER BY c.id DESC`,
+                [teacher.id, activeYear.id]
+            );
+        } else {
+            classes = await db.getAllAsync<ClassItem>(
+                `SELECT c.*, 
+                    (SELECT COUNT(*) FROM class_students cs WHERE cs.classId = c.id) AS studentCount
+                 FROM classes c
+                 WHERE c.teacherId = ?
+                 ORDER BY c.id DESC`,
+                [teacher.id]
+            );
+        }
 
         return classes ?? [];
     } catch (error) {
@@ -598,9 +613,12 @@ export async function createClass(
             return { success: false, message: "Teacher account not found." };
         }
 
+        const activeYear = await getActiveSchoolYear(username);
+        const schoolYearId = input.school_year_id ?? activeYear?.id ?? null;
+
         const result = await db.runAsync(
-            `INSERT INTO classes (teacherId, name, section, subject, room, schedule, color)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO classes (teacherId, name, section, subject, room, schedule, color, school_year_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 teacher.id,
                 input.name.trim(),
@@ -609,6 +627,7 @@ export async function createClass(
                 input.room?.trim() || null,
                 input.schedule?.trim() || null,
                 input.color?.trim() || "#4F46E5",
+                schoolYearId,
             ]
         );
 
@@ -709,6 +728,9 @@ export async function addStudentToClass(
         const normalizedMiddlename = middlename?.trim() ? middlename.trim() : null;
         const normalizedSuffix = normalizeSuffix(suffix);
 
+        const activeYear = await getActiveSchoolYear(username);
+        const schoolYearId = activeYear?.id ?? null;
+
         await db.withTransactionAsync(async () => {
             const insertStudentResult = await db.runAsync(
                 `INSERT INTO students (firstname, middlename, lastname, suffix, teacherId, classId)
@@ -726,8 +748,8 @@ export async function addStudentToClass(
             const newStudentId = insertStudentResult.lastInsertRowId;
 
             await db.runAsync(
-                `INSERT OR IGNORE INTO class_students (classId, studentId) VALUES (?, ?)`,
-                [classId, newStudentId]
+                `INSERT OR IGNORE INTO class_students (classId, studentId, school_year_id) VALUES (?, ?, ?)`,
+                [classId, newStudentId, schoolYearId]
             );
 
             // If there are existing attendance sessions for this class, pre-populate record as '1'
@@ -783,6 +805,9 @@ export async function addStudentsBulkToClass(
         let insertedCount = 0;
         let skippedCount = 0;
 
+        const activeYear = await getActiveSchoolYear(username);
+        const schoolYearId = activeYear?.id ?? null;
+
         await db.withTransactionAsync(async () => {
             // Get sessions for this class to link records
             const sessions = await db.getAllAsync<{ id: number }>(
@@ -817,8 +842,8 @@ export async function addStudentsBulkToClass(
                 const newStudentId = res.lastInsertRowId;
 
                 await db.runAsync(
-                    `INSERT OR IGNORE INTO class_students (classId, studentId) VALUES (?, ?)`,
-                    [classId, newStudentId]
+                    `INSERT OR IGNORE INTO class_students (classId, studentId, school_year_id) VALUES (?, ?, ?)`,
+                    [classId, newStudentId, schoolYearId]
                 );
 
                 for (const s of sessions) {

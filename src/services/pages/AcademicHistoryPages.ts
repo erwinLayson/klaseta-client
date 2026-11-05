@@ -48,13 +48,13 @@ export interface AcademicStudentRecordItem {
     remarks: string; // "Passed" | "Failed"
     attendanceRate: number | null;
     quarterGrades: Record<string, number | null>;
-    breakdown: {
+    breakdown: Array<{
         weightName: string;
         weightPercent: number;
         percentage: number;
         totalScore: number;
         totalMaxScore: number;
-    }[];
+    }>;
     createdAt?: string;
 }
 
@@ -191,10 +191,10 @@ export async function getAcademicHistory(username: string): Promise<AcademicHist
         const overallAverageGrade =
             recordsWithGrade.length > 0
                 ? Math.round(
-                      (recordsWithGrade.reduce((sum, r) => sum + (r.averageGrade || 0), 0) /
-                          recordsWithGrade.length) *
-                          10
-                  ) / 10
+                    (recordsWithGrade.reduce((sum, r) => sum + (r.averageGrade || 0), 0) /
+                        recordsWithGrade.length) *
+                    10
+                ) / 10
                 : null;
         const overallPassingRate =
             totalStudentsRecorded > 0 ? Math.round((totalPassedAll / totalStudentsRecorded) * 100) : null;
@@ -397,11 +397,11 @@ export async function markSchoolYearAsCompleted(
                 );
                 const sessionIds = sessions.map((s) => s.id);
 
-                let attendanceRecords: {
+                let attendanceRecords: Array<{
                     sessionId: number;
                     studentId: number;
                     status: string;
-                }[] = [];
+                }> = [];
                 if (sessionIds.length > 0) {
                     attendanceRecords = await db.getAllAsync<{
                         sessionId: number;
@@ -414,7 +414,7 @@ export async function markSchoolYearAsCompleted(
                 }
 
                 // Process student snapshots
-                const studentSnapshots: {
+                const studentSnapshots: Array<{
                     studentId: number;
                     studentName: string;
                     lrn: string | null;
@@ -424,7 +424,7 @@ export async function markSchoolYearAsCompleted(
                     attendanceRate: number | null;
                     quarterGrades: Record<string, number | null>;
                     breakdown: any[];
-                }[] = [];
+                }> = [];
 
                 for (const s of students) {
                     const fullName = `${s.firstname} ${s.lastname}`;
@@ -448,10 +448,10 @@ export async function markSchoolYearAsCompleted(
                         scoresMap,
                         totalAttSessions > 0
                             ? {
-                                  present: presentCount,
-                                  total: totalAttSessions,
-                                  percentage: attRate,
-                              }
+                                present: presentCount,
+                                total: totalAttSessions,
+                                percentage: attRate,
+                            }
                             : undefined
                     );
 
@@ -508,19 +508,19 @@ export async function markSchoolYearAsCompleted(
                 const averageGrade =
                     gradedSnapshots.length > 0
                         ? Math.round(
-                              (gradedSnapshots.reduce((acc, sn) => acc + (sn.finalGrade || 0), 0) /
-                                  gradedSnapshots.length) *
-                                  10
-                          ) / 10
+                            (gradedSnapshots.reduce((acc, sn) => acc + (sn.finalGrade || 0), 0) /
+                                gradedSnapshots.length) *
+                            10
+                        ) / 10
                         : null;
 
                 const averageAttendance =
                     studentSnapshots.length > 0
                         ? Math.round(
-                              (studentSnapshots.reduce((acc, sn) => acc + (sn.attendanceRate || 100), 0) /
-                                  studentSnapshots.length) *
-                                  10
-                          ) / 10
+                            (studentSnapshots.reduce((acc, sn) => acc + (sn.attendanceRate || 100), 0) /
+                                studentSnapshots.length) *
+                            10
+                        ) / 10
                         : null;
 
                 // 3. Insert or update class record in academic_records

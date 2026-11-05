@@ -1,6 +1,7 @@
 import { getDatabase } from "../database/connection";
 import type { ClassItem } from "../../types/class";
 import { getAcademicSettings, type AcademicSettings } from "./SettingsPages";
+import { getActiveSchoolYear } from "./SchoolYearService";
 
 export interface DashboardStats {
     totalClasses: number;
@@ -91,48 +92,90 @@ export async function getDashboardData(username: string): Promise<DashboardData 
         if (!user) return null;
         const teacherId = user.id;
 
-        // 1. Academic Settings
+        // 1. Academic Settings & Active School Year
         const academicSettings = await getAcademicSettings(username);
+        const activeYear = await getActiveSchoolYear(username);
+        const schoolYearId = activeYear?.id ?? null;
 
-        // 2. Classes with student counts
-        const classes = await db.getAllAsync<ClassItem>(
-            `SELECT c.*, 
-                (SELECT COUNT(*) FROM class_students cs WHERE cs.classId = c.id) AS studentCount
-             FROM classes c
-             WHERE c.teacherId = ?
-             ORDER BY c.id DESC`,
-            [teacherId]
-        );
+        // 2. Classes with student counts (active school year)
+        const classes = schoolYearId
+            ? await db.getAllAsync<ClassItem>(
+                  `SELECT c.*, 
+                      (SELECT COUNT(*) FROM class_students cs WHERE cs.classId = c.id) AS studentCount
+                   FROM classes c
+                   WHERE c.teacherId = ? AND (c.school_year_id = ? OR c.school_year_id IS NULL)
+                   ORDER BY c.id DESC`,
+                  [teacherId, schoolYearId]
+              )
+            : await db.getAllAsync<ClassItem>(
+                  `SELECT c.*, 
+                      (SELECT COUNT(*) FROM class_students cs WHERE cs.classId = c.id) AS studentCount
+                   FROM classes c
+                   WHERE c.teacherId = ?
+                   ORDER BY c.id DESC`,
+                  [teacherId]
+              );
 
         // 3. Counts: Students, Assessments, Sessions
-        const studentRes = await db.getFirstAsync<{ count: number }>(
-            "SELECT COUNT(*) as count FROM students WHERE teacherId = ?",
-            [teacherId]
-        );
+        const studentRes = schoolYearId
+            ? await db.getFirstAsync<{ count: number }>(
+                  `SELECT COUNT(DISTINCT cs.studentId) as count 
+                   FROM class_students cs 
+                   JOIN classes c ON cs.classId = c.id
+                   WHERE c.teacherId = ? AND (c.school_year_id = ? OR c.school_year_id IS NULL)`,
+                  [teacherId, schoolYearId]
+              )
+            : await db.getFirstAsync<{ count: number }>(
+                  "SELECT COUNT(*) as count FROM students WHERE teacherId = ?",
+                  [teacherId]
+              );
 
-        const assessmentRes = await db.getFirstAsync<{ count: number }>(
-            "SELECT COUNT(*) as count FROM assessments WHERE teacherId = ?",
-            [teacherId]
-        );
+        const assessmentRes = schoolYearId
+            ? await db.getFirstAsync<{ count: number }>(
+                  "SELECT COUNT(*) as count FROM assessments WHERE teacherId = ? AND (school_year_id = ? OR school_year_id IS NULL)",
+                  [teacherId, schoolYearId]
+              )
+            : await db.getFirstAsync<{ count: number }>(
+                  "SELECT COUNT(*) as count FROM assessments WHERE teacherId = ?",
+                  [teacherId]
+              );
 
-        const sessionRes = await db.getFirstAsync<{ count: number }>(
-            "SELECT COUNT(*) as count FROM attendance_sessions WHERE teacherId = ?",
-            [teacherId]
-        );
+        const sessionRes = schoolYearId
+            ? await db.getFirstAsync<{ count: number }>(
+                  "SELECT COUNT(*) as count FROM attendance_sessions WHERE teacherId = ? AND (school_year_id = ? OR school_year_id IS NULL)",
+                  [teacherId, schoolYearId]
+              )
+            : await db.getFirstAsync<{ count: number }>(
+                  "SELECT COUNT(*) as count FROM attendance_sessions WHERE teacherId = ?",
+                  [teacherId]
+              );
 
         // 4. Overall Attendance Rate
-        const attendanceRes = await db.getFirstAsync<{
-            totalRecords: number;
-            presentCount: number;
-        }>(
-            `SELECT 
-                COUNT(*) as totalRecords,
-                SUM(CASE WHEN ar.status = '1' OR ar.status = 'present' THEN 1 ELSE 0 END) as presentCount
-             FROM attendance_records ar
-             JOIN attendance_sessions s ON ar.sessionId = s.id
-             WHERE s.teacherId = ?`,
-            [teacherId]
-        );
+        const attendanceRes = schoolYearId
+            ? await db.getFirstAsync<{
+                  totalRecords: number;
+                  presentCount: number;
+              }>(
+                  `SELECT 
+                      COUNT(*) as totalRecords,
+                      SUM(CASE WHEN ar.status = '1' OR ar.status = 'present' THEN 1 ELSE 0 END) as presentCount
+                   FROM attendance_records ar
+                   JOIN attendance_sessions s ON ar.sessionId = s.id
+                   WHERE s.teacherId = ? AND (s.school_year_id = ? OR s.school_year_id IS NULL)`,
+                  [teacherId, schoolYearId]
+              )
+            : await db.getFirstAsync<{
+                  totalRecords: number;
+                  presentCount: number;
+              }>(
+                  `SELECT 
+                      COUNT(*) as totalRecords,
+                      SUM(CASE WHEN ar.status = '1' OR ar.status = 'present' THEN 1 ELSE 0 END) as presentCount
+                   FROM attendance_records ar
+                   JOIN attendance_sessions s ON ar.sessionId = s.id
+                   WHERE s.teacherId = ?`,
+                  [teacherId]
+              );
 
         let attendanceRate: number | null = null;
         if (attendanceRes && attendanceRes.totalRecords > 0) {
@@ -144,65 +187,124 @@ export async function getDashboardData(username: string): Promise<DashboardData 
 
         // 5. Today's sessions count
         const todayDate = getTodayDateString();
-        const todaySessionsRes = await db.getFirstAsync<{ count: number }>(
-            "SELECT COUNT(*) as count FROM attendance_sessions WHERE teacherId = ? AND date = ?",
-            [teacherId, todayDate]
-        );
+        const todaySessionsRes = schoolYearId
+            ? await db.getFirstAsync<{ count: number }>(
+                  "SELECT COUNT(*) as count FROM attendance_sessions WHERE teacherId = ? AND date = ? AND (school_year_id = ? OR school_year_id IS NULL)",
+                  [teacherId, todayDate, schoolYearId]
+              )
+            : await db.getFirstAsync<{ count: number }>(
+                  "SELECT COUNT(*) as count FROM attendance_sessions WHERE teacherId = ? AND date = ?",
+                  [teacherId, todayDate]
+              );
 
         // 6. Recent Activities
-        const recentAttendance = await db.getAllAsync<{
-            id: number;
-            date: string;
-            title: string | null;
-            quarter: string | null;
-            createdAt: string | null;
-            classId: number | null;
-            className: string | null;
-        }>(
-            `SELECT s.id, s.date, s.title, s.quarter, s.createdAt, s.classId, c.name as className
-             FROM attendance_sessions s
-             LEFT JOIN classes c ON s.classId = c.id
-             WHERE s.teacherId = ?
-             ORDER BY s.date DESC, s.id DESC
-             LIMIT 4`,
-            [teacherId]
-        );
+        const recentAttendance = schoolYearId
+            ? await db.getAllAsync<{
+                  id: number;
+                  date: string;
+                  title: string | null;
+                  quarter: string | null;
+                  createdAt: string | null;
+                  classId: number | null;
+                  className: string | null;
+              }>(
+                  `SELECT s.id, s.date, s.title, s.quarter, s.createdAt, s.classId, c.name as className
+                   FROM attendance_sessions s
+                   LEFT JOIN classes c ON s.classId = c.id
+                   WHERE s.teacherId = ? AND (s.school_year_id = ? OR s.school_year_id IS NULL)
+                   ORDER BY s.date DESC, s.id DESC
+                   LIMIT 4`,
+                  [teacherId, schoolYearId]
+              )
+            : await db.getAllAsync<{
+                  id: number;
+                  date: string;
+                  title: string | null;
+                  quarter: string | null;
+                  createdAt: string | null;
+                  classId: number | null;
+                  className: string | null;
+              }>(
+                  `SELECT s.id, s.date, s.title, s.quarter, s.createdAt, s.classId, c.name as className
+                   FROM attendance_sessions s
+                   LEFT JOIN classes c ON s.classId = c.id
+                   WHERE s.teacherId = ?
+                   ORDER BY s.date DESC, s.id DESC
+                   LIMIT 4`,
+                  [teacherId]
+              );
 
-        const recentAssessments = await db.getAllAsync<{
-            id: number;
-            title: string;
-            maxScore: number;
-            date: string;
-            quarter: string | null;
-            createdAt: string | null;
-            classId: number | null;
-            className: string | null;
-        }>(
-            `SELECT a.id, a.title, a.maxScore, a.date, a.quarter, a.createdAt, a.classId, c.name as className
-             FROM assessments a
-             LEFT JOIN classes c ON a.classId = c.id
-             WHERE a.teacherId = ?
-             ORDER BY a.date DESC, a.id DESC
-             LIMIT 4`,
-            [teacherId]
-        );
+        const recentAssessments = schoolYearId
+            ? await db.getAllAsync<{
+                  id: number;
+                  title: string;
+                  maxScore: number;
+                  date: string;
+                  quarter: string | null;
+                  createdAt: string | null;
+                  classId: number | null;
+                  className: string | null;
+              }>(
+                  `SELECT a.id, a.title, a.maxScore, a.date, a.quarter, a.createdAt, a.classId, c.name as className
+                   FROM assessments a
+                   LEFT JOIN classes c ON a.classId = c.id
+                   WHERE a.teacherId = ? AND (a.school_year_id = ? OR a.school_year_id IS NULL)
+                   ORDER BY a.date DESC, a.id DESC
+                   LIMIT 4`,
+                  [teacherId, schoolYearId]
+              )
+            : await db.getAllAsync<{
+                  id: number;
+                  title: string;
+                  maxScore: number;
+                  date: string;
+                  quarter: string | null;
+                  createdAt: string | null;
+                  classId: number | null;
+                  className: string | null;
+              }>(
+                  `SELECT a.id, a.title, a.maxScore, a.date, a.quarter, a.createdAt, a.classId, c.name as className
+                   FROM assessments a
+                   LEFT JOIN classes c ON a.classId = c.id
+                   WHERE a.teacherId = ?
+                   ORDER BY a.date DESC, a.id DESC
+                   LIMIT 4`,
+                  [teacherId]
+              );
 
-        const recentClasses = await db.getAllAsync<{
-            id: number;
-            name: string;
-            section: string | null;
-            color: string | null;
-            createdAt: string | null;
-            studentCount: number;
-        }>(
-            `SELECT c.id, c.name, c.section, c.color, c.createdAt,
-                    (SELECT COUNT(*) FROM class_students cs WHERE cs.classId = c.id) as studentCount
-             FROM classes c
-             WHERE c.teacherId = ?
-             ORDER BY c.id DESC
-             LIMIT 3`,
-            [teacherId]
-        );
+        const recentClasses = schoolYearId
+            ? await db.getAllAsync<{
+                  id: number;
+                  name: string;
+                  section: string | null;
+                  color: string | null;
+                  createdAt: string | null;
+                  studentCount: number;
+              }>(
+                  `SELECT c.id, c.name, c.section, c.color, c.createdAt,
+                          (SELECT COUNT(*) FROM class_students cs WHERE cs.classId = c.id) as studentCount
+                   FROM classes c
+                   WHERE c.teacherId = ? AND (c.school_year_id = ? OR c.school_year_id IS NULL)
+                   ORDER BY c.id DESC
+                   LIMIT 3`,
+                  [teacherId, schoolYearId]
+              )
+            : await db.getAllAsync<{
+                  id: number;
+                  name: string;
+                  section: string | null;
+                  color: string | null;
+                  createdAt: string | null;
+                  studentCount: number;
+              }>(
+                  `SELECT c.id, c.name, c.section, c.color, c.createdAt,
+                          (SELECT COUNT(*) FROM class_students cs WHERE cs.classId = c.id) as studentCount
+                   FROM classes c
+                   WHERE c.teacherId = ?
+                   ORDER BY c.id DESC
+                   LIMIT 3`,
+                  [teacherId]
+              );
 
         const activities: RecentActivityItem[] = [];
 
