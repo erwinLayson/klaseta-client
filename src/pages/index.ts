@@ -6,3 +6,4 @@ export { AttendancePages } from "./AttendancePages";
 export { GradebookPages } from "./GradebookPages";
 export { SettingsPages } from "./SettingsPages";
 export { LandingPages } from "./LandingPages";
+export { AcademicHistoryPages } from "./AcademicHistoryPages";

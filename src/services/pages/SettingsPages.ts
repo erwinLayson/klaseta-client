@@ -43,6 +43,7 @@ export interface AcademicSettings {
     semester: string;
     passingScore: number;
     quarterCount: number; // 3 or 4
+    status?: "active" | "completed";
     updatedAt?: string;
 }
 
@@ -52,6 +53,7 @@ export interface UpdateAcademicSettingsInput {
     semester: string;
     passingScore?: number;
     quarterCount?: number; // 3 or 4
+    status?: "active" | "completed";
 }
 
 export async function getUserProfile(username: string): Promise<UserProfileInfo | null> {
@@ -394,6 +396,7 @@ export async function getAcademicSettings(
             ? {
                   ...settings,
                   quarterCount: settings.quarterCount === 3 ? 3 : 4,
+                  status: (settings.status as "active" | "completed") || "active",
               }
             : {
                   id: 0,
@@ -403,6 +406,7 @@ export async function getAcademicSettings(
                   semester: "1st Semester",
                   passingScore: 75.0,
                   quarterCount: 4,
+                  status: "active",
               };
     } catch (error) {
         console.error("Error fetching academic settings:", error);
@@ -423,6 +427,7 @@ export async function updateAcademicSettings(
     }
     const semester = input.semester?.trim() || "1st Semester";
     const passingScore = input.passingScore ?? 75.0;
+    const status = input.status || "active";
 
     if (!academicYear) {
         return { success: false, message: "Academic Year is required." };
@@ -440,16 +445,17 @@ export async function updateAcademicSettings(
         }
 
         await db.runAsync(
-            `INSERT INTO academic_settings (teacherId, academicYear, activeQuarter, semester, passingScore, quarterCount, updatedAt)
-             VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            `INSERT INTO academic_settings (teacherId, academicYear, activeQuarter, semester, passingScore, quarterCount, status, updatedAt)
+             VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
              ON CONFLICT(teacherId) DO UPDATE SET
                  academicYear = excluded.academicYear,
                  activeQuarter = excluded.activeQuarter,
                  semester = excluded.semester,
                  passingScore = excluded.passingScore,
                  quarterCount = excluded.quarterCount,
+                 status = excluded.status,
                  updatedAt = CURRENT_TIMESTAMP`,
-            [teacher.id, academicYear, activeQuarter, semester, passingScore, quarterCount]
+            [teacher.id, academicYear, activeQuarter, semester, passingScore, quarterCount, status]
         );
 
         const updated = await db.getFirstAsync<AcademicSettings>(

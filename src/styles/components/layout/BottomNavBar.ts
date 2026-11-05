@@ -11,18 +11,20 @@ export const styles = StyleSheet.create({
         shadowRadius: 12,
         elevation: 8,
     },
-    container: {
+    scrollContainer: {
         flexDirection: "row",
-        justifyContent: "space-around",
         alignItems: "center",
+        justifyContent: "space-around",
+        minWidth: "100%",
         paddingTop: 8,
-        paddingHorizontal: 8,
+        paddingHorizontal: 6,
     },
     tabItem: {
-        flex: 1,
+        minWidth: 66,
         alignItems: "center",
         justifyContent: "center",
         paddingVertical: 4,
+        paddingHorizontal: 6,
     },
     tabItemPressed: {
         opacity: 0.7,

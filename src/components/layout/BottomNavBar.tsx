@@ -1,9 +1,15 @@
-import { Text, View, Pressable } from "react-native";
+import { Text, View, Pressable, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { styles } from "../../styles/components/layout/BottomNavBar";
 
-export type NavTab = "dashboard" | "myclass" | "attendance" | "gradebook" | "settings";
+export type NavTab =
+    | "dashboard"
+    | "myclass"
+    | "attendance"
+    | "gradebook"
+    | "academichistory"
+    | "settings";
 
 interface NavItemConfig {
     key: NavTab;
@@ -38,6 +44,12 @@ const NAV_ITEMS: NavItemConfig[] = [
         inactiveIcon: "book-outline",
     },
     {
+        key: "academichistory",
+        label: "History",
+        activeIcon: "time",
+        inactiveIcon: "time-outline",
+    },
+    {
         key: "settings",
         label: "Settings",
         activeIcon: "settings",
@@ -55,7 +67,12 @@ export function BottomNavBar({ activeTab, onTabPress }: BottomNavBarProps) {
 
     return (
         <View style={[styles.wrapper, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-            <View style={styles.container}>
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContainer}
+                bounces={false}
+            >
                 {NAV_ITEMS.map((item) => {
                     const isActive = activeTab === item.key;
                     const iconName = isActive ? item.activeIcon : item.inactiveIcon;
@@ -70,7 +87,12 @@ export function BottomNavBar({ activeTab, onTabPress }: BottomNavBarProps) {
                                 pressed && styles.tabItemPressed,
                             ]}
                         >
-                            <View style={[styles.iconContainer, isActive && styles.iconContainerActive]}>
+                            <View
+                                style={[
+                                    styles.iconContainer,
+                                    isActive && styles.iconContainerActive,
+                                ]}
+                            >
                                 <Ionicons name={iconName} size={20} color={iconColor} />
                             </View>
                             <Text
@@ -85,7 +107,7 @@ export function BottomNavBar({ activeTab, onTabPress }: BottomNavBarProps) {
                         </Pressable>
                     );
                 })}
-            </View>
+            </ScrollView>
         </View>
     );
 }

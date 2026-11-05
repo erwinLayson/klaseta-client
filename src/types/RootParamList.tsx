@@ -7,4 +7,5 @@ export type RootParamList = {
     attendance: { username: string; classId?: number };
     gradebook: { username: string; classId?: number };
     settings: { username: string };
+    academichistory: { username: string; schoolYear?: string };
 };

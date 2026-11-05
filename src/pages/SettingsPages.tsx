@@ -31,6 +31,7 @@ import {
     deleteUserAccount,
     type UserProfileInfo,
 } from "../services/pages/SettingsPages";
+import { markSchoolYearAsCompleted } from "../services/pages/AcademicHistoryPages";
 
 export function SettingsPages() {
     const navigation = useNavigation<NativeStackNavigationProp<RootParamList>>();
@@ -52,7 +53,11 @@ export function SettingsPages() {
     const [semester, setSemester] = useState("1st Semester");
     const [passingScore, setPassingScore] = useState("75");
     const [quarterCount, setQuarterCount] = useState<number>(4);
+    const [academicStatus, setAcademicStatus] = useState<"active" | "completed">("active");
     const [isSavingAcademicSettings, setIsSavingAcademicSettings] = useState(false);
+    const [isConfirmCompleteModalOpen, setIsConfirmCompleteModalOpen] = useState(false);
+    const [nextSchoolYearInput, setNextSchoolYearInput] = useState("");
+    const [isCompletingYear, setIsCompletingYear] = useState(false);
 
     // Credentials / Password Form State
     const [currentPassword, setCurrentPassword] = useState("");
@@ -106,6 +111,7 @@ export function SettingsPages() {
                         setSemester(academic.semester);
                         setPassingScore(String(academic.passingScore));
                         setQuarterCount(academic.quarterCount === 3 ? 3 : 4);
+                        setAcademicStatus(academic.status || "active");
                     }
                 }
             } finally {
@@ -242,6 +248,7 @@ export function SettingsPages() {
                 semester,
                 passingScore: scoreNum,
                 quarterCount,
+                status: academicStatus,
             });
 
             if (res.success) {
@@ -261,6 +268,59 @@ export function SettingsPages() {
             }
         } finally {
             setIsSavingAcademicSettings(false);
+        }
+    };
+
+    const handleOpenCompleteModal = () => {
+        const match = academicYear.match(/^(\d{4})-(\d{4})$/);
+        if (match) {
+            const start = parseInt(match[1], 10);
+            const end = parseInt(match[2], 10);
+            setNextSchoolYearInput(`${start + 1}-${end + 1}`);
+        } else {
+            setNextSchoolYearInput("");
+        }
+        setIsConfirmCompleteModalOpen(true);
+    };
+
+    const handleConfirmCompleteYear = async () => {
+        if (isCompletingYear) return;
+
+        setIsCompletingYear(true);
+        try {
+            const res = await markSchoolYearAsCompleted(
+                currentUsername,
+                academicYear,
+                nextSchoolYearInput.trim() || undefined
+            );
+
+            if (res.success) {
+                setIsConfirmCompleteModalOpen(false);
+                const updatedAcademic = await getAcademicSettings(currentUsername);
+                if (updatedAcademic) {
+                    setAcademicYear(updatedAcademic.academicYear);
+                    setActiveQuarter(updatedAcademic.activeQuarter);
+                    setSemester(updatedAcademic.semester);
+                    setPassingScore(String(updatedAcademic.passingScore));
+                    setQuarterCount(updatedAcademic.quarterCount === 3 ? 3 : 4);
+                    setAcademicStatus(updatedAcademic.status || "active");
+                }
+                setDialog({
+                    visible: true,
+                    type: "success",
+                    title: "School Year Completed",
+                    message: res.message,
+                });
+            } else {
+                setDialog({
+                    visible: true,
+                    type: "error",
+                    title: "Completion Failed",
+                    message: res.message,
+                });
+            }
+        } finally {
+            setIsCompletingYear(false);
         }
     };
 
@@ -471,6 +531,36 @@ export function SettingsPages() {
                                 Configure your active school year, semester, and current grading quarter. New attendance sessions and gradebook assessments will default to these settings.
                             </Text>
 
+                            {/* Academic Year Status */}
+                            <View style={settingsPagesStyle.statusHeaderRow}>
+                                <Text style={settingsPagesStyle.statusLabel}>Academic Status</Text>
+                                <View
+                                    style={[
+                                        settingsPagesStyle.statusBadge,
+                                        academicStatus === "completed"
+                                            ? settingsPagesStyle.statusBadgeCompleted
+                                            : settingsPagesStyle.statusBadgeActive,
+                                    ]}
+                                >
+                                    <View
+                                        style={
+                                            academicStatus === "completed"
+                                                ? settingsPagesStyle.statusDotCompleted
+                                                : settingsPagesStyle.statusDotActive
+                                        }
+                                    />
+                                    <Text
+                                        style={
+                                            academicStatus === "completed"
+                                                ? settingsPagesStyle.statusBadgeTextCompleted
+                                                : settingsPagesStyle.statusBadgeTextActive
+                                        }
+                                    >
+                                        {academicStatus === "completed" ? "Completed" : "Active"}
+                                    </Text>
+                                </View>
+                            </View>
+
                             {/* Academic Year Field */}
                             <View style={settingsPagesStyle.formGroup}>
                                 <Text style={settingsPagesStyle.formLabel}>Academic Year</Text>
@@ -656,6 +746,43 @@ export function SettingsPages() {
                                     </>
                                 )}
                             </Pressable>
+
+                            {/* Additional Academic Actions */}
+                            <View style={settingsPagesStyle.academicActionsContainer}>
+                                {/* Mark School Year as Completed Button */}
+                                <Pressable
+                                    style={({ pressed }) => [
+                                        settingsPagesStyle.completeYearButton,
+                                        pressed && settingsPagesStyle.completeYearButtonPressed,
+                                    ]}
+                                    onPress={handleOpenCompleteModal}
+                                >
+                                    <Ionicons name="archive-outline" size={18} color="#B45309" />
+                                    <Text style={settingsPagesStyle.completeYearButtonText}>
+                                        Mark School Year as Completed
+                                    </Text>
+                                </Pressable>
+
+                                {/* View Academic Records Button */}
+                                <Pressable
+                                    style={({ pressed }) => [
+                                        settingsPagesStyle.viewHistoryButton,
+                                        pressed && settingsPagesStyle.viewHistoryButtonPressed,
+                                    ]}
+                                    onPress={() =>
+                                        navigation.navigate("academichistory", {
+                                            username: currentUsername,
+                                            schoolYear: academicYear,
+                                        })
+                                    }
+                                >
+                                    <Ionicons name="time-outline" size={18} color="#4F46E5" />
+                                    <Text style={settingsPagesStyle.viewHistoryButtonText}>
+                                        View Academic Records
+                                    </Text>
+                                    <Ionicons name="chevron-forward" size={16} color="#4F46E5" />
+                                </Pressable>
+                            </View>
                         </View>
                     </View>
 
@@ -982,6 +1109,83 @@ export function SettingsPages() {
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
+
+            {/* Mark School Year as Completed Modal */}
+            <Modal
+                visible={isConfirmCompleteModalOpen}
+                transparent
+                animationType="fade"
+                onRequestClose={() => {
+                    if (!isCompletingYear) setIsConfirmCompleteModalOpen(false);
+                }}
+            >
+                <View style={settingsPagesStyle.modalOverlay}>
+                    <View style={settingsPagesStyle.completeModalContent}>
+                        <View style={settingsPagesStyle.completeModalIconBox}>
+                            <Ionicons name="archive" size={28} color="#D97706" />
+                        </View>
+                        <Text style={settingsPagesStyle.completeModalTitle}>
+                            Complete School Year?
+                        </Text>
+                        <Text style={settingsPagesStyle.completeModalMessage}>
+                            Completing School Year <Text style={{ fontWeight: "700", color: "#0F172A" }}>{academicYear}</Text> will snapshot and permanently archive student final grades, attendance summaries, and grading assessments into Academic History.
+                        </Text>
+
+                        <View style={settingsPagesStyle.completeModalInputGroup}>
+                            <Text style={settingsPagesStyle.completeModalInputLabel}>
+                                Next School Year (Optional)
+                            </Text>
+                            <View
+                                style={[
+                                    settingsPagesStyle.inputContainer,
+                                    focusedInput === "nextSchoolYear" && settingsPagesStyle.inputContainerFocused,
+                                ]}
+                            >
+                                <Ionicons
+                                    name="calendar-outline"
+                                    size={18}
+                                    color={focusedInput === "nextSchoolYear" ? "#4F46E5" : "#94A3B8"}
+                                    style={settingsPagesStyle.inputIconLeft}
+                                />
+                                <TextInput
+                                    style={settingsPagesStyle.input}
+                                    placeholder="e.g. 2025-2026"
+                                    placeholderTextColor="#94A3B8"
+                                    value={nextSchoolYearInput}
+                                    onChangeText={setNextSchoolYearInput}
+                                    onFocus={() => setFocusedInput("nextSchoolYear")}
+                                    onBlur={() => setFocusedInput(null)}
+                                />
+                            </View>
+                            <Text style={settingsPagesStyle.formHelpText}>
+                                Enter the next academic year to immediately roll over as active, or leave empty to set status to Completed.
+                            </Text>
+                        </View>
+
+                        <Pressable
+                            disabled={isCompletingYear}
+                            onPress={handleConfirmCompleteYear}
+                            style={settingsPagesStyle.completeConfirmButton}
+                        >
+                            {isCompletingYear ? (
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : (
+                                <Text style={settingsPagesStyle.completeConfirmButtonText}>
+                                    Confirm & Archive School Year
+                                </Text>
+                            )}
+                        </Pressable>
+
+                        <Pressable
+                            disabled={isCompletingYear}
+                            onPress={() => setIsConfirmCompleteModalOpen(false)}
+                            style={settingsPagesStyle.completeCancelButton}
+                        >
+                            <Text style={settingsPagesStyle.completeCancelButtonText}>Cancel</Text>
+                        </Pressable>
+                    </View>
+                </View>
+            </Modal>
 
             {/* Delete Account Confirmation Modal */}
             <Modal

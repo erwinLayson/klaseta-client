@@ -8,6 +8,7 @@ import { createClassesTable } from "./006_create_classes_table";
 import { addAttendanceClassGuard } from "./007_add_attendance_class_guard";
 import { addAcademicSettingsAndQuarterTracking } from "./008_add_academic_settings_and_quarter_tracking";
 import { addQuarterCountToAcademicSettings } from "./009_add_quarter_count_to_academic_settings";
+import { createAcademicHistoryAndRecords } from "./010_create_academic_history_and_records";
 
 export const migrations: Migration[] = [
     createUsersTable,
@@ -19,4 +20,5 @@ export const migrations: Migration[] = [
     addAttendanceClassGuard,
     addAcademicSettingsAndQuarterTracking,
     addQuarterCountToAcademicSettings,
+    createAcademicHistoryAndRecords,
 ];

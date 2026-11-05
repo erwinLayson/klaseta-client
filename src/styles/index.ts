@@ -7,6 +7,7 @@ export { styles as attendancePagesStyle } from "./pages/AttendancePages";
 export { styles as gradebookPagesStyle } from "./pages/GradebookPages";
 export { styles as settingsPagesStyle } from "./pages/SettingsPages";
 export { styles as landingPagesStyle } from "./pages/LandingPages";
+export { styles as academicHistoryPagesStyle } from "./pages/AcademicHistoryPages";
 
 // Component styles
 export { styles as buttonStyle } from "./components/ui/Button";

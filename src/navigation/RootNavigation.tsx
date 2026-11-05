@@ -8,6 +8,7 @@ import {
     AttendancePages,
     GradebookPages,
     SettingsPages,
+    AcademicHistoryPages,
 } from "../pages/index";
 import { RootParamList } from "../types/RootParamList";
 
@@ -42,6 +43,11 @@ export function RootParamNavigation() {
             <Stack.Screen
                 name="settings"
                 component={SettingsPages}
+                options={{ headerShown: false, animation: "none" }}
+            />
+            <Stack.Screen
+                name="academichistory"
+                component={AcademicHistoryPages}
                 options={{ headerShown: false, animation: "none" }}
             />
         </Stack.Navigator>
