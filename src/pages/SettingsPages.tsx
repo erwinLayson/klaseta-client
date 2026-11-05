@@ -1278,6 +1278,11 @@ export function SettingsPages() {
                                         onBlur={() => setFocusedInput(null)}
                                     />
                                 </View>
+                                {schoolYearsList.length > 0 && (
+                                    <Text style={[settingsPagesStyle.formHelpText, { marginTop: 6 }]}>
+                                        Existing: {schoolYearsList.map((sy) => `${sy.schoolYear} (${sy.status})`).join(", ")}
+                                    </Text>
+                                )}
                             </View>
 
                             {/* Semester Selection */}

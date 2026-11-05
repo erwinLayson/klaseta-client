@@ -48,13 +48,13 @@ export interface AcademicStudentRecordItem {
     remarks: string; // "Passed" | "Failed"
     attendanceRate: number | null;
     quarterGrades: Record<string, number | null>;
-    breakdown: Array<{
+    breakdown: {
         weightName: string;
         weightPercent: number;
         percentage: number;
         totalScore: number;
         totalMaxScore: number;
-    }>;
+    }[];
     createdAt?: string;
 }
 
@@ -397,11 +397,11 @@ export async function markSchoolYearAsCompleted(
                 );
                 const sessionIds = sessions.map((s) => s.id);
 
-                let attendanceRecords: Array<{
+                let attendanceRecords: {
                     sessionId: number;
                     studentId: number;
                     status: string;
-                }> = [];
+                }[] = [];
                 if (sessionIds.length > 0) {
                     attendanceRecords = await db.getAllAsync<{
                         sessionId: number;
@@ -414,7 +414,7 @@ export async function markSchoolYearAsCompleted(
                 }
 
                 // Process student snapshots
-                const studentSnapshots: Array<{
+                const studentSnapshots: {
                     studentId: number;
                     studentName: string;
                     lrn: string | null;
@@ -424,7 +424,7 @@ export async function markSchoolYearAsCompleted(
                     attendanceRate: number | null;
                     quarterGrades: Record<string, number | null>;
                     breakdown: any[];
-                }> = [];
+                }[] = [];
 
                 for (const s of students) {
                     const fullName = `${s.firstname} ${s.lastname}`;

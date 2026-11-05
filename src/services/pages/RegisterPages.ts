@@ -30,13 +30,22 @@ export async function handleRegister(form: UserRegisterProp): Promise<RegisterRe
     try {
         const db = await getDatabase();
 
-        const existing = await db.getFirstAsync<{ id: number }>(
-            "SELECT id FROM users WHERE email = ?",
+        const existingEmail = await db.getFirstAsync<{ id: number }>(
+            "SELECT id FROM users WHERE LOWER(email) = LOWER(?)",
             [email.trim()]
         );
 
-        if (existing) {
+        if (existingEmail) {
             return { success: false, message: "An account with this email already exists." };
+        }
+
+        const existingUsername = await db.getFirstAsync<{ id: number }>(
+            "SELECT id FROM users WHERE LOWER(username) = LOWER(?)",
+            [username.trim()]
+        );
+
+        if (existingUsername) {
+            return { success: false, message: "This username is already taken. Please choose another." };
         }
 
         const hashPassword = await bcrypt.hash(password.toString(), 10);

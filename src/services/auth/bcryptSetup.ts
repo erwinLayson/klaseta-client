@@ -1,9 +1,15 @@
 import bcrypt from "bcryptjs";
-import * as Crypto from "expo-crypto";
 
-// Ensure bcrypt has a cryptographically secure random fallback in React Native / Hermes
+// Ensure bcrypt has a cryptographically secure random fallback in React Native / Hermes / Node
 bcrypt.setRandomFallback((len: number) => {
     try {
+        if (typeof globalThis !== "undefined" && globalThis.crypto && typeof globalThis.crypto.getRandomValues === "function") {
+            const randomBytes = globalThis.crypto.getRandomValues(new Uint8Array(len));
+            return Array.from(randomBytes);
+        }
+        // Fallback for environments where expo-crypto is available
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const Crypto = require("expo-crypto");
         const randomBytes = Crypto.getRandomValues(new Uint8Array(len));
         return Array.from(randomBytes);
     } catch {
@@ -16,4 +22,5 @@ bcrypt.setRandomFallback((len: number) => {
 });
 
 export { bcrypt };
+
 

@@ -1,5 +1,4 @@
 import * as XLSX from "xlsx";
-import * as FileSystem from "expo-file-system/legacy";
 import { getDatabase } from "../database/connection";
 import type { Student, AddStudentInput } from "../../types/student";
 import type { ClassItem, CreateClassInput, UpdateClassInput } from "../../types/class";
@@ -143,6 +142,7 @@ export async function parseAndValidateXlsx(
     fileName: string
 ): Promise<XlsxValidationResult> {
     try {
+        const FileSystem = await import("expo-file-system/legacy");
         const base64Data = await FileSystem.readAsStringAsync(fileUri, {
             encoding: FileSystem.EncodingType.Base64,
         });

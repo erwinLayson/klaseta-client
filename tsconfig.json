@@ -3,5 +3,16 @@
   "compilerOptions": {
     "strict": true,
     "jsx": "react-jsx"
-  }
+  },
+  "include": [
+    "src",
+    "App.tsx",
+    "index.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "test",
+    "dist",
+    ".expo"
+  ]
 }
