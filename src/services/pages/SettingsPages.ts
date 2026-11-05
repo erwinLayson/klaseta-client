@@ -1,3 +1,4 @@
+import { bcrypt } from "../auth/bcryptSetup";
 import { getDatabase } from "../database/connection";
 
 export interface UserProfileInfo {
@@ -9,6 +10,29 @@ export interface UserProfileInfo {
     sessionCount: number;
     assessmentCount: number;
     createdAt?: string;
+}
+
+export interface UpdateProfileInput {
+    username: string;
+    email: string;
+}
+
+export interface UpdateProfileResult {
+    success: boolean;
+    message: string;
+    newUsername?: string;
+    newEmail?: string;
+}
+
+export interface UpdatePasswordInput {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+}
+
+export interface UpdatePasswordResult {
+    success: boolean;
+    message: string;
 }
 
 export async function getUserProfile(username: string): Promise<UserProfileInfo | null> {
@@ -154,4 +178,163 @@ export async function deleteUserAccount(
         };
     }
 }
+
+export async function updateUserProfile(
+    currentUsername: string,
+    input: UpdateProfileInput
+): Promise<UpdateProfileResult> {
+    const trimmedUsername = input.username?.trim();
+    const trimmedEmail = input.email?.trim().toLowerCase();
+
+    if (!trimmedUsername) {
+        return { success: false, message: "Username cannot be empty." };
+    }
+
+    if (!trimmedEmail) {
+        return { success: false, message: "Email cannot be empty." };
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+        return { success: false, message: "Please enter a valid email address." };
+    }
+
+    try {
+        const db = await getDatabase();
+
+        const user = await db.getFirstAsync<{ id: number; username: string; email: string }>(
+            "SELECT id, username, email FROM users WHERE username = ?",
+            [currentUsername.trim()]
+        );
+
+        if (!user) {
+            return { success: false, message: "User account not found." };
+        }
+
+        // Check if no changes were made
+        if (user.username === trimmedUsername && user.email.toLowerCase() === trimmedEmail) {
+            return {
+                success: true,
+                message: "No changes detected. Profile is up to date.",
+                newUsername: user.username,
+                newEmail: user.email,
+            };
+        }
+
+        // Check if new username is already taken by another account
+        if (user.username !== trimmedUsername) {
+            const existingUsername = await db.getFirstAsync<{ id: number }>(
+                "SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?",
+                [trimmedUsername, user.id]
+            );
+            if (existingUsername) {
+                return {
+                    success: false,
+                    message: "This username is already taken. Please choose another.",
+                };
+            }
+        }
+
+        // Check if new email is already taken by another account
+        if (user.email.toLowerCase() !== trimmedEmail) {
+            const existingEmail = await db.getFirstAsync<{ id: number }>(
+                "SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND id != ?",
+                [trimmedEmail, user.id]
+            );
+            if (existingEmail) {
+                return {
+                    success: false,
+                    message: "An account with this email address already exists.",
+                };
+            }
+        }
+
+        // Update username and email in the database
+        await db.runAsync(
+            "UPDATE users SET username = ?, email = ? WHERE id = ?",
+            [trimmedUsername, trimmedEmail, user.id]
+        );
+
+        return {
+            success: true,
+            message: "Personal information updated successfully!",
+            newUsername: trimmedUsername,
+            newEmail: trimmedEmail,
+        };
+    } catch (error) {
+        console.error("Error updating user profile:", error);
+        return {
+            success: false,
+            message: "Failed to update profile. Please try again.",
+        };
+    }
+}
+
+export async function updateUserPassword(
+    username: string,
+    input: UpdatePasswordInput
+): Promise<UpdatePasswordResult> {
+    const { currentPassword, newPassword, confirmPassword } = input;
+
+    if (!currentPassword?.trim() || !newPassword || !confirmPassword) {
+        return { success: false, message: "Please fill in all password fields." };
+    }
+
+    if (newPassword.length < 6) {
+        return { success: false, message: "New password must be at least 6 characters." };
+    }
+
+    if (newPassword !== confirmPassword) {
+        return { success: false, message: "New passwords do not match." };
+    }
+
+    if (newPassword === currentPassword) {
+        return {
+            success: false,
+            message: "New password must be different from your current password.",
+        };
+    }
+
+    try {
+        const db = await getDatabase();
+
+        const user = await db.getFirstAsync<{ id: number; password: string }>(
+            "SELECT id, password FROM users WHERE username = ?",
+            [username.trim()]
+        );
+
+        if (!user) {
+            return { success: false, message: "User account not found." };
+        }
+
+        // Check if current password matches (bcrypt or legacy plaintext)
+        const isPasswordMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isPasswordMatch && user.password !== currentPassword) {
+            return {
+                success: false,
+                message: "The current password you entered is incorrect.",
+            };
+        }
+
+        // Hash the new password with bcrypt
+        const hashedPassword = await bcrypt.hash(newPassword.toString(), 10);
+
+        await db.runAsync(
+            "UPDATE users SET password = ? WHERE id = ?",
+            [hashedPassword, user.id]
+        );
+
+        return {
+            success: true,
+            message: "Password updated successfully!",
+        };
+    } catch (error) {
+        console.error("Error updating user password:", error);
+        return {
+            success: false,
+            message: "Failed to update password. Please try again.",
+        };
+    }
+}
+
 
