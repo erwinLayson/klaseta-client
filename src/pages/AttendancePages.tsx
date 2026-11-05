@@ -32,6 +32,7 @@ import {
     Button,
     InputGroup,
     DialogMessage,
+    CalendarPickerModal,
     type NavTab,
 } from "../components/index";
 import type { DialogType } from "../components/ui/DialogMessage";
@@ -1145,148 +1146,17 @@ export function AttendancePages() {
                 )}
             </ScrollView>
 
-            {/* Select Specific Date Modal */}
-            <Modal
+            {/* Calendar Date Filter Modal */}
+            <CalendarPickerModal
                 visible={isDateSelectModalOpen}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setIsDateSelectModalOpen(false)}
-            >
-                <Pressable
-                    style={attendancePagesStyle.modalOverlay}
-                    onPress={() => setIsDateSelectModalOpen(false)}
-                >
-                    <Pressable
-                        style={attendancePagesStyle.modalContent}
-                        onPress={(e) => e.stopPropagation()}
-                    >
-                        <View style={attendancePagesStyle.modalHeader}>
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                                <Ionicons name="calendar" size={20} color="#059669" />
-                                <Text style={attendancePagesStyle.modalTitle}>Select Date</Text>
-                            </View>
-                            <Pressable
-                                onPress={() => setIsDateSelectModalOpen(false)}
-                                hitSlop={8}
-                            >
-                                <Ionicons name="close" size={22} color="#64748B" />
-                            </Pressable>
-                        </View>
-
-                        <Text style={attendancePagesStyle.datePickerSubtitle}>
-                            Choose a specific attendance date to view:
-                        </Text>
-
-                        <ScrollView
-                            style={{ maxHeight: 320 }}
-                            showsVerticalScrollIndicator={false}
-                        >
-                            {/* Option: All Dates */}
-                            <Pressable
-                                onPress={() => {
-                                    setSelectedDate("");
-                                    setIsDateSelectModalOpen(false);
-                                }}
-                                style={({ pressed }) => [
-                                    attendancePagesStyle.dateOptionItem,
-                                    selectedDate === "" && attendancePagesStyle.dateOptionItemSelected,
-                                    pressed && attendancePagesStyle.dateOptionItemPressed,
-                                ]}
-                            >
-                                <View style={attendancePagesStyle.dateOptionLeft}>
-                                    <View
-                                        style={[
-                                            attendancePagesStyle.dateOptionIconBox,
-                                            selectedDate === "" && { backgroundColor: "#D1FAE5" },
-                                        ]}
-                                    >
-                                        <Ionicons
-                                            name="calendar-outline"
-                                            size={18}
-                                            color={selectedDate === "" ? "#059669" : "#64748B"}
-                                        />
-                                    </View>
-                                    <View>
-                                        <Text
-                                            style={[
-                                                attendancePagesStyle.dateOptionTitle,
-                                                selectedDate === "" && { color: "#059669", fontWeight: "700" },
-                                            ]}
-                                        >
-                                            All Dates
-                                        </Text>
-                                        <Text style={attendancePagesStyle.dateOptionSub}>
-                                            Display all {sessions.length} sessions
-                                        </Text>
-                                    </View>
-                                </View>
-                                {selectedDate === "" && (
-                                    <Ionicons name="checkmark-circle" size={20} color="#059669" />
-                                )}
-                            </Pressable>
-
-                            {/* Specific dates list */}
-                            {uniqueSessionDates.map((dateStr) => {
-                                const isSelected = selectedDate === dateStr;
-                                const sessionCount = sessions.filter((s) => s.date === dateStr).length;
-
-                                return (
-                                    <Pressable
-                                        key={dateStr}
-                                        onPress={() => {
-                                            setSelectedDate(dateStr);
-                                            setIsDateSelectModalOpen(false);
-                                        }}
-                                        style={({ pressed }) => [
-                                            attendancePagesStyle.dateOptionItem,
-                                            isSelected && attendancePagesStyle.dateOptionItemSelected,
-                                            pressed && attendancePagesStyle.dateOptionItemPressed,
-                                        ]}
-                                    >
-                                        <View style={attendancePagesStyle.dateOptionLeft}>
-                                            <View
-                                                style={[
-                                                    attendancePagesStyle.dateOptionIconBox,
-                                                    isSelected && { backgroundColor: "#D1FAE5" },
-                                                ]}
-                                            >
-                                                <Ionicons
-                                                    name="calendar"
-                                                    size={18}
-                                                    color={isSelected ? "#059669" : "#64748B"}
-                                                />
-                                            </View>
-                                            <View>
-                                                <Text
-                                                    style={[
-                                                        attendancePagesStyle.dateOptionTitle,
-                                                        isSelected && { color: "#059669", fontWeight: "700" },
-                                                    ]}
-                                                >
-                                                    {formatFullDate(dateStr)}
-                                                </Text>
-                                                <Text style={attendancePagesStyle.dateOptionSub}>
-                                                    {dateStr} • {sessionCount} session{sessionCount > 1 ? "s" : ""}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                        {isSelected && (
-                                            <Ionicons name="checkmark-circle" size={20} color="#059669" />
-                                        )}
-                                    </Pressable>
-                                );
-                            })}
-                        </ScrollView>
-
-                        <Pressable
-                            onPress={() => setIsDateSelectModalOpen(false)}
-                            style={attendancePagesStyle.cancelButton}
-                        >
-                            <Text style={attendancePagesStyle.cancelButtonText}>Cancel</Text>
-                        </Pressable>
-                    </Pressable>
-                </Pressable>
-            </Modal>
+                selectedDate={selectedDate}
+                onSelectDate={(d) => setSelectedDate(d)}
+                onClose={() => setIsDateSelectModalOpen(false)}
+                markedDates={uniqueSessionDates}
+                title="Filter by Date"
+                subtitle="Select any date on the calendar to view its attendance records:"
+                accentColor="#059669"
+            />
 
             {/* Create / Edit Attendance Session Modal */}
             <Modal

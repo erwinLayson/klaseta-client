@@ -40,6 +40,7 @@ import {
     InputGroup,
     SelectGroup,
     DialogMessage,
+    CalendarPickerModal,
     type NavTab,
     type SelectOption,
 } from "../components/index";
@@ -59,19 +60,6 @@ function formatDateHeader(dateStr: string): string {
         if (parts.length === 3) {
             const date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
             return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-        }
-        return dateStr;
-    } catch {
-        return dateStr;
-    }
-}
-
-function formatFullDate(dateStr: string): string {
-    try {
-        const parts = dateStr.split("-");
-        if (parts.length === 3) {
-            const date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-            return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
         }
         return dateStr;
     } catch {
@@ -1934,134 +1922,16 @@ export function GradebookPages() {
             </Modal>
 
             {/* Date Select Filter Modal */}
-            <Modal
+            <CalendarPickerModal
                 visible={isDateSelectModalOpen}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setIsDateSelectModalOpen(false)}
-            >
-                <View style={gradebookPagesStyle.modalOverlay}>
-                    <View style={gradebookPagesStyle.modalContent}>
-                        <View style={gradebookPagesStyle.modalHeader}>
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                                <Ionicons name="calendar-outline" size={22} color="#059669" />
-                                <Text style={gradebookPagesStyle.modalTitle}>Filter by Date</Text>
-                            </View>
-                            <Pressable
-                                onPress={() => setIsDateSelectModalOpen(false)}
-                                hitSlop={8}
-                            >
-                                <Ionicons name="close" size={22} color="#64748B" />
-                            </Pressable>
-                        </View>
-
-                        <Text style={gradebookPagesStyle.datePickerSubtitle}>
-                            Choose a specific assessment date to view:
-                        </Text>
-
-                        <ScrollView
-                            style={{ maxHeight: 320 }}
-                            showsVerticalScrollIndicator={false}
-                        >
-                            {/* Option: All Dates */}
-                            <Pressable
-                                onPress={() => {
-                                    setSelectedDate("");
-                                    setIsDateSelectModalOpen(false);
-                                }}
-                                style={({ pressed }) => [
-                                    gradebookPagesStyle.dateOptionItem,
-                                    selectedDate === "" && gradebookPagesStyle.dateOptionItemSelected,
-                                    pressed && gradebookPagesStyle.dateOptionItemPressed,
-                                ]}
-                            >
-                                <View style={gradebookPagesStyle.dateOptionLeft}>
-                                    <View
-                                        style={[
-                                            gradebookPagesStyle.dateOptionIconBox,
-                                            selectedDate === "" && { backgroundColor: "#D1FAE5" },
-                                        ]}
-                                    >
-                                        <Ionicons
-                                            name="calendar-outline"
-                                            size={18}
-                                            color={selectedDate === "" ? "#059669" : "#64748B"}
-                                        />
-                                    </View>
-                                    <View>
-                                        <Text
-                                            style={[
-                                                gradebookPagesStyle.dateOptionTitle,
-                                                selectedDate === "" && { color: "#059669", fontWeight: "700" },
-                                            ]}
-                                        >
-                                            All Dates
-                                        </Text>
-                                        <Text style={gradebookPagesStyle.dateOptionSub}>
-                                            Display all {assessments.length} assessments
-                                        </Text>
-                                    </View>
-                                </View>
-                                {selectedDate === "" && (
-                                    <Ionicons name="checkmark-circle" size={20} color="#059669" />
-                                )}
-                            </Pressable>
-
-                            {/* Specific dates list */}
-                            {uniqueAssessmentDates.map((dateStr) => {
-                                const isSelected = selectedDate === dateStr;
-                                const assessmentCount = assessments.filter((a) => a.date === dateStr).length;
-
-                                return (
-                                    <Pressable
-                                        key={dateStr}
-                                        onPress={() => {
-                                            setSelectedDate(dateStr);
-                                            setIsDateSelectModalOpen(false);
-                                        }}
-                                        style={({ pressed }) => [
-                                            gradebookPagesStyle.dateOptionItem,
-                                            isSelected && gradebookPagesStyle.dateOptionItemSelected,
-                                            pressed && gradebookPagesStyle.dateOptionItemPressed,
-                                        ]}
-                                    >
-                                        <View style={gradebookPagesStyle.dateOptionLeft}>
-                                            <View
-                                                style={[
-                                                    gradebookPagesStyle.dateOptionIconBox,
-                                                    isSelected && { backgroundColor: "#D1FAE5" },
-                                                ]}
-                                            >
-                                                <Ionicons
-                                                    name="calendar"
-                                                    size={18}
-                                                    color={isSelected ? "#059669" : "#64748B"}
-                                                />
-                                            </View>
-                                            <View>
-                                                <Text
-                                                    style={[
-                                                        gradebookPagesStyle.dateOptionTitle,
-                                                        isSelected && { color: "#059669", fontWeight: "700" },
-                                                    ]}
-                                                >
-                                                    {formatFullDate(dateStr)}
-                                                </Text>
-                                                <Text style={gradebookPagesStyle.dateOptionSub}>
-                                                    {dateStr} • {assessmentCount} assessment{assessmentCount > 1 ? "s" : ""}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                        {isSelected && (
-                                            <Ionicons name="checkmark-circle" size={20} color="#059669" />
-                                        )}
-                                    </Pressable>
-                                );
-                            })}
-                        </ScrollView>
-                    </View>
-                </View>
-            </Modal>
+                selectedDate={selectedDate}
+                onSelectDate={(d) => setSelectedDate(d)}
+                onClose={() => setIsDateSelectModalOpen(false)}
+                markedDates={uniqueAssessmentDates}
+                title="Filter by Date"
+                subtitle="Select any date on the calendar to view its assessments:"
+                accentColor="#059669"
+            />
 
             {/* Kebab Action Menu Modal */}
             <Modal
