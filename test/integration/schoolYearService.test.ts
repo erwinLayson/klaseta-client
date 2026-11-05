@@ -137,5 +137,39 @@ describe("School Year Management Service (Integration Tests)", () => {
             teardownTestEnvironment(testDb);
         }
     });
+
+    it("should start a new school year with an initial class in a single transaction", async () => {
+        const testDb = await setupTestEnvironment();
+        try {
+            await seedTestTeacher(testDb, "sy_teacher6", "sy6@test.com");
+
+            const startRes = await startNewSchoolYear("sy_teacher6", {
+                schoolYear: "2025-2026",
+                semester: "1st Semester",
+                quarterCount: 4,
+                initialClass: {
+                    name: "Grade 9 - Diamond",
+                    section: "Section A",
+                    subject: "General Science",
+                },
+            });
+
+            assert.strictEqual(startRes.success, true);
+            assert.ok(startRes.schoolYearId);
+            assert.ok(startRes.classId);
+
+            // Verify class exists and is linked to the new school year
+            const createdClass = await testDb.getFirstAsync<{ id: number; name: string; section: string; school_year_id: number }>(
+                "SELECT * FROM classes WHERE id = ?",
+                [startRes.classId]
+            );
+            assert.ok(createdClass);
+            assert.strictEqual(createdClass.name, "Grade 9 - Diamond");
+            assert.strictEqual(createdClass.section, "Section A");
+            assert.strictEqual(createdClass.school_year_id, startRes.schoolYearId);
+        } finally {
+            teardownTestEnvironment(testDb);
+        }
+    });
 });
 

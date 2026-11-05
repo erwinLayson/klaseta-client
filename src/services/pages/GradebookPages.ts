@@ -162,6 +162,17 @@ export async function createAssessment(
             return { success: false, message: "Teacher account not found." };
         }
 
+        const settings = await db.getFirstAsync<{ status: string }>(
+            "SELECT status FROM academic_settings WHERE teacherId = ?",
+            [teacher.id]
+        );
+        if (settings?.status === "completed") {
+            return {
+                success: false,
+                message: "Current school year is marked as completed. Please start a new school year in Settings before creating assessments.",
+            };
+        }
+
         const quarter = input.quarter?.trim() || "Q1";
         const activeYear = await getActiveSchoolYear(username);
         const schoolYearId = input.school_year_id ?? activeYear?.id ?? null;
@@ -254,6 +265,16 @@ export async function getGradebookSpreadsheet(
         );
 
         if (!teacher) {
+            return { students: [], weights: [], assessments: [], scoresMap: {}, attendanceMap: {} };
+        }
+
+        const settings = await db.getFirstAsync<{ status: string }>(
+            "SELECT status FROM academic_settings WHERE teacherId = ?",
+            [teacher.id]
+        );
+
+        // When school year is marked completed, the operational gradebook spreadsheet is cleanly reset
+        if (settings?.status === "completed") {
             return { students: [], weights: [], assessments: [], scoresMap: {}, attendanceMap: {} };
         }
 

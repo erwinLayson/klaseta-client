@@ -94,6 +94,27 @@ export async function getDashboardData(username: string): Promise<DashboardData 
 
         // 1. Academic Settings & Active School Year
         const academicSettings = await getAcademicSettings(username);
+
+        // When current school year is marked completed, active dashboard metrics are cleanly reset
+        if (academicSettings?.status === "completed") {
+            return {
+                teacher: user,
+                academicSettings,
+                stats: {
+                    totalClasses: 0,
+                    totalStudents: 0,
+                    totalAssessments: 0,
+                    totalSessions: 0,
+                    attendanceRate: null,
+                    todaySessionsCount: 0,
+                },
+                classes: [],
+                recentActivities: [],
+                formattedToday: getFormattedToday(),
+                todayDate: getTodayDateString(),
+            };
+        }
+
         const activeYear = await getActiveSchoolYear(username);
         const schoolYearId = activeYear?.id ?? null;
 

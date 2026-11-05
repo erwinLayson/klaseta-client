@@ -1,9 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { setupTestEnvironment, teardownTestEnvironment, seedTestTeacher } from "../helpers/testDatabase";
-import { createClass, addStudentToClass } from "../../src/services/pages/MyClassPages";
-import { createAssessment, getGradingWeights, saveAllAssessmentScores } from "../../src/services/pages/GradebookPages";
-import { createAttendanceSession, saveAllAttendanceRecords } from "../../src/services/pages/AttendancePages";
+import { createClass, addStudentToClass, getClassesByTeacher } from "../../src/services/pages/MyClassPages";
+import { createAssessment, getGradingWeights, saveAllAssessmentScores, getGradebookSpreadsheet } from "../../src/services/pages/GradebookPages";
+import { createAttendanceSession, saveAllAttendanceRecords, getAttendanceSpreadsheet } from "../../src/services/pages/AttendancePages";
+import { getDashboardData } from "../../src/services/pages/DashboardPages";
 import {
     markSchoolYearAsCompleted,
     getAcademicHistory,
@@ -133,6 +134,8 @@ describe("Academic History & Snapshot Archive (Integration Tests)", () => {
             // Delete record
             const delRes = await deleteAcademicRecord(recordId);
             assert.strictEqual(delRes.success, true);
+            assert.strictEqual(delRes.schoolYearDeleted, true);
+            assert.strictEqual(delRes.schoolYear, "2024-2025");
 
             // Verify record and its child student records are gone
             const details = await getAcademicRecordDetails(recordId);
@@ -143,6 +146,12 @@ describe("Academic History & Snapshot Archive (Integration Tests)", () => {
                 [recordId]
             );
             assert.strictEqual(childStudents.length, 0);
+
+            // School year must be removed from academic history when its records are deleted
+            const historyAfter = await getAcademicHistory("ah_teacher3");
+            assert.ok(historyAfter);
+            assert.strictEqual(historyAfter.records.length, 0);
+            assert.strictEqual(historyAfter.schoolYears.length, 0);
         } finally {
             teardownTestEnvironment(testDb);
         }
@@ -165,6 +174,60 @@ describe("Academic History & Snapshot Archive (Integration Tests)", () => {
             const history = await getAcademicHistory("ah_teacher4");
             assert.ok(history);
             assert.strictEqual(history.records.length, 0);
+        } finally {
+            teardownTestEnvironment(testDb);
+        }
+    });
+
+    it("should reset operational workspace immediately upon marking school year as completed", async () => {
+        const testDb = await setupTestEnvironment();
+        try {
+            await seedTestTeacher(testDb, "ah_teacher_reset", "reset@test.com");
+
+            const classRes = await createClass("ah_teacher_reset", { name: "Class To Complete", section: "Alpha" });
+            assert.ok(classRes.classId);
+            await addStudentToClass("ah_teacher_reset", classRes.classId, { firstname: "John", lastname: "Doe" });
+
+            const sessionRes = await createAttendanceSession("ah_teacher_reset", "2024-09-01", "Session 1", classRes.classId, "Q1");
+            assert.ok(sessionRes.sessionId);
+
+            // Verify active data is visible prior to completion
+            const classesBefore = await getClassesByTeacher("ah_teacher_reset");
+            assert.strictEqual(classesBefore.length, 1);
+            const dashBefore = await getDashboardData("ah_teacher_reset");
+            assert.strictEqual(dashBefore?.stats.totalClasses, 1);
+
+            // Mark school year as completed (without starting a new one yet)
+            const markRes = await markSchoolYearAsCompleted("ah_teacher_reset", "2024-2025");
+            assert.strictEqual(markRes.success, true);
+
+            // Verify operational screens are immediately reset to clean slate
+            const classesAfter = await getClassesByTeacher("ah_teacher_reset");
+            assert.strictEqual(classesAfter.length, 0, "My Class must return empty array when year is completed");
+
+            const attendanceAfter = await getAttendanceSpreadsheet("ah_teacher_reset", classRes.classId);
+            assert.strictEqual(attendanceAfter.students.length, 0, "Attendance spreadsheet must be empty");
+            assert.strictEqual(attendanceAfter.sessions.length, 0);
+
+            const gradebookAfter = await getGradebookSpreadsheet("ah_teacher_reset", classRes.classId);
+            assert.strictEqual(gradebookAfter.students.length, 0, "Gradebook spreadsheet must be empty");
+            assert.strictEqual(gradebookAfter.assessments.length, 0);
+
+            const dashAfter = await getDashboardData("ah_teacher_reset");
+            assert.strictEqual(dashAfter?.stats.totalClasses, 0, "Dashboard stats must be reset to 0");
+            assert.strictEqual(dashAfter?.classes.length, 0);
+
+            // Creating new class while completed seamlessly activates the new school year and creates class
+            const autoClassRes = await createClass("ah_teacher_reset", { name: "New Auto Class" });
+            assert.strictEqual(autoClassRes.success, true);
+            const classesAfterCreate = await getClassesByTeacher("ah_teacher_reset");
+            assert.strictEqual(classesAfterCreate.length, 1);
+            assert.strictEqual(classesAfterCreate[0].name, "New Auto Class");
+
+            // Historical archive must exist
+            const history = await getAcademicHistory("ah_teacher_reset");
+            assert.ok(history && history.records.length > 0);
+            assert.strictEqual(history.records[0].className, "Class To Complete");
         } finally {
             teardownTestEnvironment(testDb);
         }

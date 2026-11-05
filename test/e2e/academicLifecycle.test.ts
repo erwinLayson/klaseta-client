@@ -132,6 +132,16 @@ describe("Complete End-to-End Academic Lifecycle Workflow (E2E)", () => {
             const completeRes = await markSchoolYearAsCompleted(username, "2024-2025");
             assert.strictEqual(completeRes.success, true);
 
+            // Verify active workspace is immediately reset to clean state upon completion
+            const classesAfterComplete = await getClassesByTeacher(username);
+            assert.strictEqual(classesAfterComplete.length, 0, "My Class must be reset immediately when school year is completed");
+
+            const attAfterComplete = await getAttendanceSpreadsheet(username);
+            assert.strictEqual(attAfterComplete.sessions.length, 0, "Attendance must be reset immediately when school year is completed");
+
+            const gbAfterComplete = await getGradebookSpreadsheet(username);
+            assert.strictEqual(gbAfterComplete.assessments.length, 0, "Gradebook must be reset immediately when school year is completed");
+
             // Step 11: Verify previous academic records are preserved in Academic History
             const historyAfterComplete = await getAcademicHistory(username);
             assert.ok(historyAfterComplete);
@@ -150,36 +160,31 @@ describe("Complete End-to-End Academic Lifecycle Workflow (E2E)", () => {
             assert.ok(adaRecord);
             assert.strictEqual(adaRecord!.remarks, "Passed");
 
-            // Step 12 & 13: Create and Start a new school year 2025-2026
+            // Step 12 & 13: Start new school year 2025-2026 with an initial class directly
             const startNewRes = await startNewSchoolYear(username, {
                 schoolYear: "2025-2026",
                 semester: "1st Semester",
                 quarterCount: 4,
+                initialClass: { name: "Grade 11 - Section Tesla", section: "Tesla" },
             });
             assert.strictEqual(startNewRes.success, true);
+            assert.ok(startNewRes.classId);
 
             // Step 14: Verify My Class, Attendance, and Gradebook contain clean new school year operational data
             const activeSY = await getActiveSchoolYear(username);
             assert.ok(activeSY);
             assert.strictEqual(activeSY!.schoolYear, "2025-2026");
 
-            // Classes for new year should be 0
+            // Classes for new year should have the initial class created with the school year
             const classesNewYear = await getClassesByTeacher(username);
-            assert.strictEqual(classesNewYear.length, 0, "My Class must have 0 classes in newly activated school year");
-
-            // Create a brand new class in 2025-2026
-            const newClassRes = await createClass(username, { name: "Grade 11 - Section Tesla" });
-            assert.ok(newClassRes.classId);
-
-            const classesAfterAdd = await getClassesByTeacher(username);
-            assert.strictEqual(classesAfterAdd.length, 1);
-            assert.strictEqual(classesAfterAdd[0].name, "Grade 11 - Section Tesla");
+            assert.strictEqual(classesNewYear.length, 1, "My Class must contain initial class created with starting year");
+            assert.strictEqual(classesNewYear[0].name, "Grade 11 - Section Tesla");
 
             // Attendance and Gradebook for new class should be completely clean
-            const newAttSheet = await getAttendanceSpreadsheet(username, newClassRes.classId!);
+            const newAttSheet = await getAttendanceSpreadsheet(username, startNewRes.classId!);
             assert.strictEqual(newAttSheet.sessions.length, 0);
 
-            const newGbSheet = await getGradebookSpreadsheet(username, newClassRes.classId!);
+            const newGbSheet = await getGradebookSpreadsheet(username, startNewRes.classId!);
             assert.strictEqual(newGbSheet.assessments.length, 0);
 
             // Step 15: Verify historical 2024-2025 records remain fully intact and accessible through Academic History

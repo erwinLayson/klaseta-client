@@ -32,6 +32,7 @@ import {
     parseAndValidateXlsx,
     type XlsxValidationResult,
 } from "../services/pages/MyClassPages";
+import { getAcademicSettings } from "../services/pages/SettingsPages";
 import {
     BottomNavBar,
     Button,
@@ -89,6 +90,7 @@ export function MyClassPages() {
     const [classRoom, setClassRoom] = useState("");
     const [classSchedule, setClassSchedule] = useState("");
     const [classColor, setClassColor] = useState(COLOR_PALETTE[0]);
+    const [classSchoolYear, setClassSchoolYear] = useState("");
     const [isSubmittingClass, setIsSubmittingClass] = useState(false);
 
     // Delete Class confirmation modal
@@ -192,7 +194,7 @@ export function MyClassPages() {
     // ---------------------------------------------------------------------------
     // Class Actions
     // ---------------------------------------------------------------------------
-    const handleOpenCreateClass = () => {
+    const handleOpenCreateClass = async () => {
         setEditingClass(null);
         setClassName("");
         setClassSection("");
@@ -200,6 +202,29 @@ export function MyClassPages() {
         setClassRoom("");
         setClassSchedule("");
         setClassColor(COLOR_PALETTE[0]);
+        try {
+            const settings = await getAcademicSettings(username);
+            if (settings?.academicYear) {
+                if (settings.status === "completed") {
+                    const match = settings.academicYear.match(/^(\d{4})-(\d{4})$/);
+                    if (match) {
+                        const start = parseInt(match[1], 10);
+                        const end = parseInt(match[2], 10);
+                        setClassSchoolYear(`${start + 1}-${end + 1}`);
+                    } else {
+                        setClassSchoolYear(settings.academicYear);
+                    }
+                } else {
+                    setClassSchoolYear(settings.academicYear);
+                }
+            } else {
+                const currentCalYear = new Date().getFullYear();
+                setClassSchoolYear(`${currentCalYear}-${currentCalYear + 1}`);
+            }
+        } catch {
+            const currentCalYear = new Date().getFullYear();
+            setClassSchoolYear(`${currentCalYear}-${currentCalYear + 1}`);
+        }
         setIsClassModalOpen(true);
     };
 
@@ -270,6 +295,7 @@ export function MyClassPages() {
                     room: classRoom.trim() || undefined,
                     schedule: classSchedule.trim() || undefined,
                     color: classColor,
+                    schoolYear: classSchoolYear.trim() || undefined,
                 };
                 const res = await createClass(username, createInput);
                 if (res.success) {
@@ -1121,6 +1147,15 @@ export function MyClassPages() {
                                 value={classSubject}
                                 onChangeText={setClassSubject}
                             />
+
+                            {!editingClass && (
+                                <InputGroup
+                                    label="School Year"
+                                    placeholder="e.g. 2025-2026"
+                                    value={classSchoolYear}
+                                    onChangeText={setClassSchoolYear}
+                                />
+                            )}
 
                             <InputGroup
                                 label="Room"

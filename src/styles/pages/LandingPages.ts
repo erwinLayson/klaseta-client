@@ -197,12 +197,13 @@ export const styles = StyleSheet.create({
     },
     heroHighlightsRow: {
         flexDirection: "row",
+        flexWrap: "wrap",
         gap: 10,
         width: "100%",
         justifyContent: "space-between",
     },
     heroHighlightCard: {
-        flex: 1,
+        width: "48%",
         backgroundColor: "#FFFFFF",
         paddingVertical: 14,
         paddingHorizontal: 10,
@@ -334,6 +335,55 @@ export const styles = StyleSheet.create({
         fontSize: 13,
         color: "#64748B",
         lineHeight: 20,
+    },
+
+    // Workflow / How It Works
+    stepsContainer: {
+        gap: 12,
+    },
+    stepCard: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+        gap: 14,
+        backgroundColor: "#FFFFFF",
+        borderRadius: 18,
+        padding: 18,
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        shadowColor: "#0F172A",
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.03,
+        shadowRadius: 6,
+        elevation: 1,
+    },
+    stepNumberBox: {
+        width: 38,
+        height: 38,
+        borderRadius: 12,
+        backgroundColor: "#EEF2FF",
+        alignItems: "center",
+        justifyContent: "center",
+        borderWidth: 1,
+        borderColor: "#E0E7FF",
+    },
+    stepNumberText: {
+        fontSize: 16,
+        fontWeight: "800",
+        color: "#4F46E5",
+    },
+    stepContent: {
+        flex: 1,
+    },
+    stepTitle: {
+        fontSize: 15,
+        fontWeight: "700",
+        color: "#0F172A",
+        marginBottom: 4,
+    },
+    stepDesc: {
+        fontSize: 13,
+        color: "#64748B",
+        lineHeight: 19,
     },
 
     // FAQ Section

@@ -30,6 +30,14 @@ export interface StartNewSchoolYearInput {
     quarterCount?: number;
     archivePreviousIfActive?: boolean;
     copyGradingWeights?: boolean;
+    initialClass?: {
+        name: string;
+        section?: string;
+        subject?: string;
+        room?: string;
+        schedule?: string;
+        color?: string;
+    };
 }
 
 export interface CreateSchoolYearInput {
@@ -212,7 +220,7 @@ export async function createSchoolYear(
 export async function startNewSchoolYear(
     username: string,
     input: StartNewSchoolYearInput
-): Promise<{ success: boolean; message: string; schoolYearId?: number }> {
+): Promise<{ success: boolean; message: string; schoolYearId?: number; classId?: number }> {
     const rawSchoolYear = input.schoolYear?.trim();
     if (!rawSchoolYear) {
         return { success: false, message: "School Year is required (e.g. 2025-2026)." };
@@ -272,6 +280,7 @@ export async function startNewSchoolYear(
         }
 
         let newSchoolYearId = 0;
+        let createdClassId: number | undefined;
 
         // 4. Execute transition strictly inside a database transaction
         await db.withTransactionAsync(async () => {
@@ -326,7 +335,26 @@ export async function startNewSchoolYear(
                 }
             }
 
-            // E. Record audit log
+            // E. Create initial class if specified
+            if (input.initialClass && input.initialClass.name.trim()) {
+                const classInsert = await db.runAsync(
+                    `INSERT INTO classes (teacherId, name, section, subject, room, schedule, color, school_year_id)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        teacherId,
+                        input.initialClass.name.trim(),
+                        input.initialClass.section?.trim() || null,
+                        input.initialClass.subject?.trim() || null,
+                        input.initialClass.room?.trim() || null,
+                        input.initialClass.schedule?.trim() || null,
+                        input.initialClass.color?.trim() || "#4F46E5",
+                        newSchoolYearId,
+                    ]
+                );
+                createdClassId = classInsert.lastInsertRowId;
+            }
+
+            // F. Record audit log
             await db.runAsync(
                 `INSERT INTO school_year_audit_logs (teacherId, schoolYearId, schoolYear, action, performedBy, notes)
                  VALUES (?, ?, ?, 'ACTIVATED', ?, ?)`,
@@ -335,7 +363,7 @@ export async function startNewSchoolYear(
                     newSchoolYearId,
                     rawSchoolYear,
                     username.trim(),
-                    `Activated new School Year ${rawSchoolYear} (${semester}, ${quarterCount} Quarters)`,
+                    `Activated new School Year ${rawSchoolYear} (${semester}, ${quarterCount} Quarters)${createdClassId ? " with initial class" : ""}`,
                 ]
             );
         });
@@ -344,6 +372,7 @@ export async function startNewSchoolYear(
             success: true,
             message: `School Year ${rawSchoolYear} has been successfully activated! Operational records for classes, attendance, and gradebook are now cleanly initialized.`,
             schoolYearId: newSchoolYearId,
+            classId: createdClassId,
         };
     } catch (error) {
         console.error("Error starting new school year:", error);

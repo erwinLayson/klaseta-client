@@ -20,27 +20,35 @@ interface FaqItemData {
 const FAQ_ITEMS: FaqItemData[] = [
     {
         question: "Is Klaseta completely free to use?",
-        answer: "Yes! Klaseta is completely free for all teachers, educators, and instructors without subscription fees, hidden paywalls, or locked features.",
+        answer: "Yes! Klaseta is 100% free for teachers and educators without subscription fees, hidden paywalls, advertising, or locked features.",
     },
     {
         question: "Does Klaseta work offline without internet?",
-        answer: "Absolutely. Klaseta is engineered with an offline-first architecture using local SQLite database storage. You can manage classes, take daily attendance, and calculate grades anywhere without Wi-Fi or cellular data.",
+        answer: "Absolutely. Klaseta is engineered with an offline-first architecture using a high-speed local SQLite database. You can manage classrooms, take daily attendance, and calculate grades anywhere without Wi-Fi or mobile data.",
     },
     {
         question: "How does the automated grading calculation work?",
-        answer: "You can define custom category weights (e.g., 40% Exams, 30% Quizzes, 20% Projects, 10% Attendance). Klaseta computes total weighted percentages, converts scores, and provides dynamic passing/failing breakdowns automatically.",
+        answer: "Klaseta aligns with standard educational systems (such as DepEd Written Works, Performance Tasks, Quarterly Assessments, and Attendance) across 3 or 4 quarters. It automatically computes weighted scores, normalizes percentages, and provides real-time letter grades and pass/fail indicators.",
     },
     {
-        question: "Can I import students in bulk from a file?",
-        answer: "Yes! Klaseta includes a bulk upload feature supporting CSV format with first name, middle name, last name, and suffix. Duplicate records are detected and handled seamlessly.",
+        question: "Can I import students in bulk from Excel (.xlsx) or CSV?",
+        answer: "Yes! Klaseta features an intelligent bulk importer supporting both Excel spreadsheets (.xlsx, .xls) and CSV files. It automatically detects and maps column headers for first name, last name, middle name, and name suffixes (Jr., Sr., III), and skips duplicates safely.",
     },
     {
-        question: "Can I edit or delete past attendance sessions?",
-        answer: "Yes. In the Attendance spreadsheet, you can click the pencil icon to update session dates and labels, or the trash icon to permanently remove a session and its associated records.",
+        question: "What happens when a school year concludes?",
+        answer: "When you start a new school year, Klaseta automatically snapshots and archives all student final marks, attendance summaries, and assessments into Academic History. Your active workspace cleanly resets for the new school year while historical records remain permanently accessible.",
     },
     {
-        question: "Where is my data stored and is it secure?",
-        answer: "All your classroom data is stored strictly locally on your device under your authenticated teacher account. No third parties have access to your students' records.",
+        question: "Can I review or manage past academic records?",
+        answer: "Yes! The dedicated Academic History screen lets you browse all past school years, view archived class rosters, inspect student final grades, and permanently manage or delete old records whenever needed.",
+    },
+    {
+        question: "Can I edit or delete attendance sessions and grades?",
+        answer: "Yes. Both the Attendance and Gradebook spreadsheets allow full inline editing. You can update session dates, change attendance marks, edit assessment scores, or delete sessions with automatic data integrity protection.",
+    },
+    {
+        question: "Where is my data stored and is it private?",
+        answer: "All your classroom data is stored strictly locally on your physical device under your personal teacher login. No external servers or third parties ever have access to your students' private records.",
     },
 ];
 
@@ -142,22 +150,27 @@ export function LandingPages() {
                         </Pressable>
                     </View>
 
-                    {/* Quick Highlights / Stats Row */}
+                    {/* Quick Highlights / Stats Grid (2x2) */}
                     <View style={landingPagesStyle.heroHighlightsRow}>
                         <View style={landingPagesStyle.heroHighlightCard}>
                             <Ionicons name="cloud-offline-outline" size={20} color="#4F46E5" />
                             <Text style={landingPagesStyle.heroHighlightTitle}>100% Offline</Text>
-                            <Text style={landingPagesStyle.heroHighlightDesc}>Works anywhere</Text>
+                            <Text style={landingPagesStyle.heroHighlightDesc}>Local SQLite storage</Text>
                         </View>
                         <View style={landingPagesStyle.heroHighlightCard}>
-                            <Ionicons name="people-outline" size={20} color="#059669" />
-                            <Text style={landingPagesStyle.heroHighlightTitle}>Rosters & CSV</Text>
-                            <Text style={landingPagesStyle.heroHighlightDesc}>Bulk student import</Text>
+                            <Ionicons name="document-text-outline" size={20} color="#059669" />
+                            <Text style={landingPagesStyle.heroHighlightTitle}>Excel & CSV</Text>
+                            <Text style={landingPagesStyle.heroHighlightDesc}>Smart roster import</Text>
                         </View>
                         <View style={landingPagesStyle.heroHighlightCard}>
                             <Ionicons name="calculator-outline" size={20} color="#D97706" />
                             <Text style={landingPagesStyle.heroHighlightTitle}>Auto Grading</Text>
                             <Text style={landingPagesStyle.heroHighlightDesc}>Weighted formulas</Text>
+                        </View>
+                        <View style={landingPagesStyle.heroHighlightCard}>
+                            <Ionicons name="archive-outline" size={20} color="#7C3AED" />
+                            <Text style={landingPagesStyle.heroHighlightTitle}>Academic History</Text>
+                            <Text style={landingPagesStyle.heroHighlightDesc}>Multi-year archives</Text>
                         </View>
                     </View>
                 </View>
@@ -239,13 +252,13 @@ export function LandingPages() {
 
                 {/* 3. SERVICES & FEATURES SECTION */}
                 <View style={landingPagesStyle.sectionWrapper}>
-                    <Text style={landingPagesStyle.sectionTag}>Services & Features</Text>
+                    <Text style={landingPagesStyle.sectionTag}>Features & Capabilities</Text>
                     <Text style={landingPagesStyle.sectionTitle}>
                         Complete Classroom Management Suite
                     </Text>
                     <Text style={landingPagesStyle.sectionSubtitle}>
-                        Everything educators need to manage students, track records, and calculate grades
-                        efficiently.
+                        Everything educators need to manage students, track records, calculate grades,
+                        and preserve multi-year academic history.
                     </Text>
 
                     <View style={landingPagesStyle.serviceGrid}>
@@ -264,8 +277,8 @@ export function LandingPages() {
                             </Text>
                             <Text style={landingPagesStyle.serviceDesc}>
                                 Create and customize classes with subjects, sections, schedules, and colors.
-                                Add individual students or batch import hundreds of student records via CSV
-                                files in seconds.
+                                Add individual students or batch import hundreds of student records via Excel (.xlsx)
+                                and CSV files with intelligent column detection.
                             </Text>
                         </View>
 
@@ -283,9 +296,9 @@ export function LandingPages() {
                                 Daily Smart Attendance
                             </Text>
                             <Text style={landingPagesStyle.serviceDesc}>
-                                Take daily attendance with 1-tap present (1) and absent (0) toggles. Filter by
-                                specific dates, review overall attendance rates, and update or delete sessions
-                                with automatic integrity guards.
+                                Take daily attendance with 1-tap present (1) and absent (0) toggles in a clean
+                                spreadsheet. Filter by specific dates, review overall attendance rates, and update
+                                or delete sessions with automatic integrity guards.
                             </Text>
                         </View>
 
@@ -294,18 +307,18 @@ export function LandingPages() {
                             <View
                                 style={[
                                     landingPagesStyle.serviceIconWrap,
-                                    { backgroundColor: "#F5F3FF" },
+                                    { backgroundColor: "#FEF3C7" },
                                 ]}
                             >
-                                <Ionicons name="book-outline" size={24} color="#7C3AED" />
+                                <Ionicons name="calculator-outline" size={24} color="#D97706" />
                             </View>
                             <Text style={landingPagesStyle.serviceTitle}>
                                 Automated Weighted Gradebook
                             </Text>
                             <Text style={landingPagesStyle.serviceDesc}>
-                                Create assessments linked to category weights, enter scores with max-score
-                                hints, and compute student final grades automatically with detailed category
-                                breakdowns.
+                                Create assessments linked to customizable weight categories (Written Works,
+                                Performance Tasks, Quarterly Assessments, Attendance). Enter scores with max-score
+                                hints and compute final grades with real-time pass/fail breakdown.
                             </Text>
                         </View>
 
@@ -314,25 +327,122 @@ export function LandingPages() {
                             <View
                                 style={[
                                     landingPagesStyle.serviceIconWrap,
-                                    { backgroundColor: "#FEF2F2" },
+                                    { backgroundColor: "#F5F3FF" },
                                 ]}
                             >
-                                <Ionicons name="lock-closed-outline" size={24} color="#DC2626" />
+                                <Ionicons name="archive-outline" size={24} color="#7C3AED" />
                             </View>
                             <Text style={landingPagesStyle.serviceTitle}>
-                                Account & Data Security
+                                Academic History & Multi-Year Rollover
                             </Text>
                             <Text style={landingPagesStyle.serviceDesc}>
-                                Individual teacher authentication protects your records. Comprehensive account
-                                management gives you complete autonomy over your profile and classroom data.
+                                Transition smoothly to new school years with single-tap archiving. Klaseta
+                                permanently snapshots student final marks, attendance summaries, and assessments,
+                                resetting your operational workspace while keeping historical records fully accessible.
+                            </Text>
+                        </View>
+
+                        {/* Service 5 */}
+                        <View style={landingPagesStyle.serviceCard}>
+                            <View
+                                style={[
+                                    landingPagesStyle.serviceIconWrap,
+                                    { backgroundColor: "#F0F9FF" },
+                                ]}
+                            >
+                                <Ionicons name="bar-chart-outline" size={24} color="#0284C7" />
+                            </View>
+                            <Text style={landingPagesStyle.serviceTitle}>
+                                Real-Time Teacher Dashboard
+                            </Text>
+                            <Text style={landingPagesStyle.serviceDesc}>
+                                Stay organized with a live dashboard tracking active classrooms, enrolled students,
+                                today&apos;s attendance sessions, class-wide attendance rates, and chronological
+                                activity timelines.
+                            </Text>
+                        </View>
+
+                        {/* Service 6 */}
+                        <View style={landingPagesStyle.serviceCard}>
+                            <View
+                                style={[
+                                    landingPagesStyle.serviceIconWrap,
+                                    { backgroundColor: "#ECFDF5" },
+                                ]}
+                            >
+                                <Ionicons name="shield-checkmark-outline" size={24} color="#059669" />
+                            </View>
+                            <Text style={landingPagesStyle.serviceTitle}>
+                                Local Privacy & Data Security
+                            </Text>
+                            <Text style={landingPagesStyle.serviceDesc}>
+                                Authenticated teacher accounts protect your records. All data is kept securely on
+                                your personal device in local SQLite storage with zero tracking, advertisements, or
+                                external server requirements.
                             </Text>
                         </View>
                     </View>
                 </View>
 
-                {/* 4. FAQ ("FQA") SECTION */}
+                {/* 4. WORKFLOW / HOW IT WORKS SECTION */}
                 <View style={landingPagesStyle.sectionWrapper}>
-                    <Text style={landingPagesStyle.sectionTag}>FQA & Questions</Text>
+                    <Text style={landingPagesStyle.sectionTag}>Workflow</Text>
+                    <Text style={landingPagesStyle.sectionTitle}>How Klaseta Works</Text>
+                    <Text style={landingPagesStyle.sectionSubtitle}>
+                        Three simple steps to streamline your day-to-day teaching operations.
+                    </Text>
+
+                    <View style={landingPagesStyle.stepsContainer}>
+                        <View style={landingPagesStyle.stepCard}>
+                            <View style={landingPagesStyle.stepNumberBox}>
+                                <Text style={landingPagesStyle.stepNumberText}>1</Text>
+                            </View>
+                            <View style={landingPagesStyle.stepContent}>
+                                <Text style={landingPagesStyle.stepTitle}>
+                                    Create Classrooms & Import Rosters
+                                </Text>
+                                <Text style={landingPagesStyle.stepDesc}>
+                                    Set up your classes with subject names, sections, and schedules, then import
+                                    student rosters using Excel (.xlsx) templates or CSV files in seconds.
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={landingPagesStyle.stepCard}>
+                            <View style={landingPagesStyle.stepNumberBox}>
+                                <Text style={landingPagesStyle.stepNumberText}>2</Text>
+                            </View>
+                            <View style={landingPagesStyle.stepContent}>
+                                <Text style={landingPagesStyle.stepTitle}>
+                                    Record Daily Attendance & Scores
+                                </Text>
+                                <Text style={landingPagesStyle.stepDesc}>
+                                    Tap once to record attendance and enter scores in the horizontal spreadsheet.
+                                    Weighted averages, percentages, and attendance rates calculate automatically.
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={landingPagesStyle.stepCard}>
+                            <View style={landingPagesStyle.stepNumberBox}>
+                                <Text style={landingPagesStyle.stepNumberText}>3</Text>
+                            </View>
+                            <View style={landingPagesStyle.stepContent}>
+                                <Text style={landingPagesStyle.stepTitle}>
+                                    Compute Grades & Archive Yearly
+                                </Text>
+                                <Text style={landingPagesStyle.stepDesc}>
+                                    At year&apos;s end, review final student marks and transition to the next school year.
+                                    All grades and attendance are permanently archived to Academic History.
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+                </View>
+
+                {/* 5. FAQ SECTION */}
+                <View style={landingPagesStyle.sectionWrapper}>
+                    <Text style={landingPagesStyle.sectionTag}>FAQ & Help</Text>
                     <Text style={landingPagesStyle.sectionTitle}>
                         Frequently Asked Questions
                     </Text>
@@ -379,7 +489,7 @@ export function LandingPages() {
                         Ready to Simplify Your Classroom?
                     </Text>
                     <Text style={landingPagesStyle.ctaBannerSub}>
-                        Join educators who save hours every week on grading and attendance.
+                        Join educators who save hours every week on grading, attendance, and roster management.
                     </Text>
                     <Pressable
                         onPress={() => navigation.navigate("register")}
@@ -394,7 +504,7 @@ export function LandingPages() {
                     </Pressable>
                 </View>
 
-                {/* 5. FOOTER SECTION */}
+                {/* 6. FOOTER SECTION */}
                 <View style={landingPagesStyle.footer}>
                     <View style={landingPagesStyle.footerBrandRow}>
                         <Image
@@ -431,4 +541,3 @@ export function LandingPages() {
         </View>
     );
 }
-

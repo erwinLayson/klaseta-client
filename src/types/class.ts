@@ -20,6 +20,7 @@ export interface CreateClassInput {
     schedule?: string;
     color?: string;
     school_year_id?: number;
+    schoolYear?: string;
 }
 
 export interface UpdateClassInput {

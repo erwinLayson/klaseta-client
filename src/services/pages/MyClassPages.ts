@@ -2,7 +2,7 @@ import * as XLSX from "xlsx";
 import { getDatabase } from "../database/connection";
 import type { Student, AddStudentInput } from "../../types/student";
 import type { ClassItem, CreateClassInput, UpdateClassInput } from "../../types/class";
-import { getActiveSchoolYear } from "./SchoolYearService";
+import { getActiveSchoolYear, startNewSchoolYear } from "./SchoolYearService";
 
 export type StudentResult = {
     success: boolean;
@@ -547,6 +547,16 @@ export async function getClassesByTeacher(username: string): Promise<ClassItem[]
 
         if (!teacher) return [];
 
+        const settings = await db.getFirstAsync<{ status: string }>(
+            "SELECT status FROM academic_settings WHERE teacherId = ?",
+            [teacher.id]
+        );
+
+        // When school year is marked completed, the operational classroom list is cleanly reset
+        if (settings?.status === "completed") {
+            return [];
+        }
+
         const activeYear = await getActiveSchoolYear(username);
         let classes: ClassItem[] = [];
 
@@ -613,8 +623,41 @@ export async function createClass(
             return { success: false, message: "Teacher account not found." };
         }
 
-        const activeYear = await getActiveSchoolYear(username);
-        const schoolYearId = input.school_year_id ?? activeYear?.id ?? null;
+        const settings = await db.getFirstAsync<{ status: string; academicYear: string }>(
+            "SELECT status, academicYear FROM academic_settings WHERE teacherId = ?",
+            [teacher.id]
+        );
+
+        let activeYear = await getActiveSchoolYear(username);
+        let schoolYearId = input.school_year_id ?? activeYear?.id ?? null;
+
+        // If the teacher has no active school year or previous year is marked completed,
+        // automatically activate/start the new school year so the user is never blocked
+        if (!schoolYearId || settings?.status === "completed") {
+            let targetSchoolYear = input.schoolYear?.trim();
+            if (!targetSchoolYear) {
+                const prevYear = settings?.academicYear?.trim() || "";
+                const match = prevYear.match(/^(\d{4})-(\d{4})$/);
+                if (match) {
+                    const start = parseInt(match[1], 10);
+                    const end = parseInt(match[2], 10);
+                    targetSchoolYear = `${start + 1}-${end + 1}`;
+                } else {
+                    const currentCalYear = new Date().getFullYear();
+                    targetSchoolYear = `${currentCalYear}-${currentCalYear + 1}`;
+                }
+            }
+
+            const startRes = await startNewSchoolYear(username, {
+                schoolYear: targetSchoolYear,
+                archivePreviousIfActive: false, // previous year was already archived/completed
+                copyGradingWeights: true,
+            });
+
+            if (startRes.success && startRes.schoolYearId) {
+                schoolYearId = startRes.schoolYearId;
+            }
+        }
 
         const result = await db.runAsync(
             `INSERT INTO classes (teacherId, name, section, subject, room, schedule, color, school_year_id)

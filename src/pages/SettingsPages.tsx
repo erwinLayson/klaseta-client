@@ -31,7 +31,6 @@ import {
     deleteUserAccount,
     type UserProfileInfo,
 } from "../services/pages/SettingsPages";
-import { markSchoolYearAsCompleted } from "../services/pages/AcademicHistoryPages";
 import {
     startNewSchoolYear,
     getAllSchoolYears,
@@ -60,11 +59,8 @@ export function SettingsPages() {
     const [quarterCount, setQuarterCount] = useState<number>(4);
     const [academicStatus, setAcademicStatus] = useState<"active" | "completed">("active");
     const [isSavingAcademicSettings, setIsSavingAcademicSettings] = useState(false);
-    const [isConfirmCompleteModalOpen, setIsConfirmCompleteModalOpen] = useState(false);
-    const [nextSchoolYearInput, setNextSchoolYearInput] = useState("");
-    const [isCompletingYear, setIsCompletingYear] = useState(false);
 
-    // Start New School Year State
+    // Start New School Year State (Unified Transition & Class Creation)
     const [isStartYearModalOpen, setIsStartYearModalOpen] = useState(false);
     const [isStartingYear, setIsStartingYear] = useState(false);
     const [startYearInput, setStartYearInput] = useState("");
@@ -72,6 +68,9 @@ export function SettingsPages() {
     const [startQuarterCountInput, setStartQuarterCountInput] = useState<number>(4);
     const [startArchivePrevious, setStartArchivePrevious] = useState(true);
     const [startCopyWeights, setStartCopyWeights] = useState(true);
+    const [startClassNameInput, setStartClassNameInput] = useState("");
+    const [startClassSectionInput, setStartClassSectionInput] = useState("");
+    const [startClassSubjectInput, setStartClassSubjectInput] = useState("");
     const [schoolYearsList, setSchoolYearsList] = useState<SchoolYearItem[]>([]);
 
     // Credentials / Password Form State
@@ -290,59 +289,6 @@ export function SettingsPages() {
         }
     };
 
-    const handleOpenCompleteModal = () => {
-        const match = academicYear.match(/^(\d{4})-(\d{4})$/);
-        if (match) {
-            const start = parseInt(match[1], 10);
-            const end = parseInt(match[2], 10);
-            setNextSchoolYearInput(`${start + 1}-${end + 1}`);
-        } else {
-            setNextSchoolYearInput("");
-        }
-        setIsConfirmCompleteModalOpen(true);
-    };
-
-    const handleConfirmCompleteYear = async () => {
-        if (isCompletingYear) return;
-
-        setIsCompletingYear(true);
-        try {
-            const res = await markSchoolYearAsCompleted(
-                currentUsername,
-                academicYear,
-                nextSchoolYearInput.trim() || undefined
-            );
-
-            if (res.success) {
-                setIsConfirmCompleteModalOpen(false);
-                const updatedAcademic = await getAcademicSettings(currentUsername);
-                if (updatedAcademic) {
-                    setAcademicYear(updatedAcademic.academicYear);
-                    setActiveQuarter(updatedAcademic.activeQuarter);
-                    setSemester(updatedAcademic.semester);
-                    setPassingScore(String(updatedAcademic.passingScore));
-                    setQuarterCount(updatedAcademic.quarterCount === 3 ? 3 : 4);
-                    setAcademicStatus(updatedAcademic.status || "active");
-                }
-                setDialog({
-                    visible: true,
-                    type: "success",
-                    title: "School Year Completed",
-                    message: res.message,
-                });
-            } else {
-                setDialog({
-                    visible: true,
-                    type: "error",
-                    title: "Completion Failed",
-                    message: res.message,
-                });
-            }
-        } finally {
-            setIsCompletingYear(false);
-        }
-    };
-
     const handleOpenStartYearModal = () => {
         const match = academicYear.match(/^(\d{4})-(\d{4})$/);
         if (match) {
@@ -350,12 +296,16 @@ export function SettingsPages() {
             const end = parseInt(match[2], 10);
             setStartYearInput(`${start + 1}-${end + 1}`);
         } else {
-            setStartYearInput("");
+            const currentCalYear = new Date().getFullYear();
+            setStartYearInput(`${currentCalYear}-${currentCalYear + 1}`);
         }
         setStartSemesterInput("1st Semester");
         setStartQuarterCountInput(quarterCount);
         setStartArchivePrevious(academicStatus === "active");
         setStartCopyWeights(true);
+        setStartClassNameInput("");
+        setStartClassSectionInput("");
+        setStartClassSubjectInput("");
         setIsStartYearModalOpen(true);
     };
 
@@ -381,13 +331,21 @@ export function SettingsPages() {
                 quarterCount: startQuarterCountInput,
                 archivePreviousIfActive: startArchivePrevious,
                 copyGradingWeights: startCopyWeights,
+                initialClass: startClassNameInput.trim()
+                    ? {
+                          name: startClassNameInput.trim(),
+                          section: startClassSectionInput.trim() || undefined,
+                          subject: startClassSubjectInput.trim() || undefined,
+                      }
+                    : undefined,
             });
 
             if (res.success) {
                 setIsStartYearModalOpen(false);
-                const [updatedAcademic, updatedYears] = await Promise.all([
+                const [updatedAcademic, updatedYears, updatedProfile] = await Promise.all([
                     getAcademicSettings(currentUsername),
                     getAllSchoolYears(currentUsername),
+                    getUserProfile(currentUsername),
                 ]);
 
                 if (updatedAcademic) {
@@ -400,6 +358,9 @@ export function SettingsPages() {
                 }
                 if (updatedYears) {
                     setSchoolYearsList(updatedYears);
+                }
+                if (updatedProfile) {
+                    setProfile(updatedProfile);
                 }
 
                 setDialog({
@@ -857,20 +818,6 @@ export function SettingsPages() {
                                     <Ionicons name="sparkles" size={18} color="#FFFFFF" />
                                     <Text style={settingsPagesStyle.startYearButtonText}>
                                         Start New School Year
-                                    </Text>
-                                </Pressable>
-
-                                {/* Mark School Year as Completed Button */}
-                                <Pressable
-                                    style={({ pressed }) => [
-                                        settingsPagesStyle.completeYearButton,
-                                        pressed && settingsPagesStyle.completeYearButtonPressed,
-                                    ]}
-                                    onPress={handleOpenCompleteModal}
-                                >
-                                    <Ionicons name="archive-outline" size={18} color="#B45309" />
-                                    <Text style={settingsPagesStyle.completeYearButtonText}>
-                                        Mark School Year as Completed
                                     </Text>
                                 </Pressable>
 
@@ -1388,6 +1335,86 @@ export function SettingsPages() {
                                 </View>
                             </Pressable>
 
+                            {/* Option 3: Create Initial Class (Optional) */}
+                            <View style={[settingsPagesStyle.formGroup, { marginTop: 4 }]}>
+                                <Text style={settingsPagesStyle.formLabel}>Create First Class (Optional)</Text>
+                                <View
+                                    style={[
+                                        settingsPagesStyle.inputContainer,
+                                        focusedInput === "startClassName" && settingsPagesStyle.inputContainerFocused,
+                                        { marginBottom: 8 },
+                                    ]}
+                                >
+                                    <Ionicons
+                                        name="easel-outline"
+                                        size={18}
+                                        color={focusedInput === "startClassName" ? "#4F46E5" : "#94A3B8"}
+                                        style={settingsPagesStyle.inputIconLeft}
+                                    />
+                                    <TextInput
+                                        style={settingsPagesStyle.input}
+                                        placeholder="Class Name (e.g. Grade 10 - Rizal)"
+                                        placeholderTextColor="#94A3B8"
+                                        value={startClassNameInput}
+                                        onChangeText={setStartClassNameInput}
+                                        onFocus={() => setFocusedInput("startClassName")}
+                                        onBlur={() => setFocusedInput(null)}
+                                    />
+                                </View>
+                                {startClassNameInput.trim().length > 0 && (
+                                    <>
+                                        <View
+                                            style={[
+                                                settingsPagesStyle.inputContainer,
+                                                focusedInput === "startClassSection" && settingsPagesStyle.inputContainerFocused,
+                                                { marginBottom: 8 },
+                                            ]}
+                                        >
+                                            <Ionicons
+                                                name="people-outline"
+                                                size={18}
+                                                color={focusedInput === "startClassSection" ? "#4F46E5" : "#94A3B8"}
+                                                style={settingsPagesStyle.inputIconLeft}
+                                            />
+                                            <TextInput
+                                                style={settingsPagesStyle.input}
+                                                placeholder="Section (Optional, e.g. Diamond)"
+                                                placeholderTextColor="#94A3B8"
+                                                value={startClassSectionInput}
+                                                onChangeText={setStartClassSectionInput}
+                                                onFocus={() => setFocusedInput("startClassSection")}
+                                                onBlur={() => setFocusedInput(null)}
+                                            />
+                                        </View>
+                                        <View
+                                            style={[
+                                                settingsPagesStyle.inputContainer,
+                                                focusedInput === "startClassSubject" && settingsPagesStyle.inputContainerFocused,
+                                            ]}
+                                        >
+                                            <Ionicons
+                                                name="book-outline"
+                                                size={18}
+                                                color={focusedInput === "startClassSubject" ? "#4F46E5" : "#94A3B8"}
+                                                style={settingsPagesStyle.inputIconLeft}
+                                            />
+                                            <TextInput
+                                                style={settingsPagesStyle.input}
+                                                placeholder="Subject (Optional, e.g. Mathematics)"
+                                                placeholderTextColor="#94A3B8"
+                                                value={startClassSubjectInput}
+                                                onChangeText={setStartClassSubjectInput}
+                                                onFocus={() => setFocusedInput("startClassSubject")}
+                                                onBlur={() => setFocusedInput(null)}
+                                            />
+                                        </View>
+                                    </>
+                                )}
+                                <Text style={settingsPagesStyle.formHelpText}>
+                                    Optionally set up your first class section right away for this new school year.
+                                </Text>
+                            </View>
+
                             {/* Confirm Button */}
                             <Pressable
                                 disabled={isStartingYear}
@@ -1415,83 +1442,6 @@ export function SettingsPages() {
                                 <Text style={settingsPagesStyle.completeCancelButtonText}>Cancel</Text>
                             </Pressable>
                         </ScrollView>
-                    </View>
-                </View>
-            </Modal>
-
-            {/* Mark School Year as Completed Modal */}
-            <Modal
-                visible={isConfirmCompleteModalOpen}
-                transparent
-                animationType="fade"
-                onRequestClose={() => {
-                    if (!isCompletingYear) setIsConfirmCompleteModalOpen(false);
-                }}
-            >
-                <View style={settingsPagesStyle.modalOverlay}>
-                    <View style={settingsPagesStyle.completeModalContent}>
-                        <View style={settingsPagesStyle.completeModalIconBox}>
-                            <Ionicons name="archive" size={28} color="#D97706" />
-                        </View>
-                        <Text style={settingsPagesStyle.completeModalTitle}>
-                            Complete School Year?
-                        </Text>
-                        <Text style={settingsPagesStyle.completeModalMessage}>
-                            Completing School Year <Text style={{ fontWeight: "700", color: "#0F172A" }}>{academicYear}</Text> will snapshot and permanently archive student final grades, attendance summaries, and grading assessments into Academic History.
-                        </Text>
-
-                        <View style={settingsPagesStyle.completeModalInputGroup}>
-                            <Text style={settingsPagesStyle.completeModalInputLabel}>
-                                Next School Year (Optional)
-                            </Text>
-                            <View
-                                style={[
-                                    settingsPagesStyle.inputContainer,
-                                    focusedInput === "nextSchoolYear" && settingsPagesStyle.inputContainerFocused,
-                                ]}
-                            >
-                                <Ionicons
-                                    name="calendar-outline"
-                                    size={18}
-                                    color={focusedInput === "nextSchoolYear" ? "#4F46E5" : "#94A3B8"}
-                                    style={settingsPagesStyle.inputIconLeft}
-                                />
-                                <TextInput
-                                    style={settingsPagesStyle.input}
-                                    placeholder="e.g. 2025-2026"
-                                    placeholderTextColor="#94A3B8"
-                                    value={nextSchoolYearInput}
-                                    onChangeText={setNextSchoolYearInput}
-                                    onFocus={() => setFocusedInput("nextSchoolYear")}
-                                    onBlur={() => setFocusedInput(null)}
-                                />
-                            </View>
-                            <Text style={settingsPagesStyle.formHelpText}>
-                                Enter the next academic year to immediately roll over as active, or leave empty to set status to Completed.
-                            </Text>
-                        </View>
-
-                        <Pressable
-                            disabled={isCompletingYear}
-                            onPress={handleConfirmCompleteYear}
-                            style={settingsPagesStyle.completeConfirmButton}
-                        >
-                            {isCompletingYear ? (
-                                <ActivityIndicator size="small" color="#FFFFFF" />
-                            ) : (
-                                <Text style={settingsPagesStyle.completeConfirmButtonText}>
-                                    Confirm & Archive School Year
-                                </Text>
-                            )}
-                        </Pressable>
-
-                        <Pressable
-                            disabled={isCompletingYear}
-                            onPress={() => setIsConfirmCompleteModalOpen(false)}
-                            style={settingsPagesStyle.completeCancelButton}
-                        >
-                            <Text style={settingsPagesStyle.completeCancelButtonText}>Cancel</Text>
-                        </Pressable>
                     </View>
                 </View>
             </Modal>

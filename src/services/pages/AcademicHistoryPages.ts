@@ -125,9 +125,15 @@ export async function getAcademicHistory(username: string): Promise<AcademicHist
         const seenYears = new Set<string>();
 
         for (const y of rawYears) {
-            seenYears.add(y.schoolYear);
             const yearRecords = records.filter((r) => r.schoolYear === y.schoolYear);
             const classCount = yearRecords.length;
+
+            // If a completed school year has no archived records, do not include it in historical archives
+            if (classCount === 0 && y.status === "completed") {
+                continue;
+            }
+
+            seenYears.add(y.schoolYear);
             const totalStudents = yearRecords.reduce((sum, r) => sum + (r.studentCount || 0), 0);
             const totalPassed = yearRecords.reduce((sum, r) => sum + (r.passedCount || 0), 0);
 
@@ -573,18 +579,38 @@ export async function markSchoolYearAsCompleted(
             // 5. Update academic_settings status to completed (or transition to next school year if requested)
             if (nextSchoolYear && nextSchoolYear.trim() !== schoolYear) {
                 await db.runAsync(
-                    `UPDATE academic_settings 
-                     SET academicYear = ?, status = 'active', activeQuarter = 'Q1', updatedAt = CURRENT_TIMESTAMP
-                     WHERE teacherId = ?`,
-                    [nextSchoolYear.trim(), teacherId]
-                );
-
-                await db.runAsync(
                     `INSERT INTO academic_years (teacherId, schoolYear, status)
                      VALUES (?, ?, 'active')
                      ON CONFLICT(teacherId, schoolYear) DO UPDATE SET status = 'active'`,
                     [teacherId, nextSchoolYear.trim()]
                 );
+
+                const nextYearRow = await db.getFirstAsync<{ id: number }>(
+                    "SELECT id FROM academic_years WHERE teacherId = ? AND schoolYear = ?",
+                    [teacherId, nextSchoolYear.trim()]
+                );
+                const nextYearId = nextYearRow?.id ?? null;
+
+                await db.runAsync(
+                    `UPDATE academic_settings 
+                     SET academicYear = ?, status = 'active', activeQuarter = 'Q1', current_school_year_id = ?, updatedAt = CURRENT_TIMESTAMP
+                     WHERE teacherId = ?`,
+                    [nextSchoolYear.trim(), nextYearId, teacherId]
+                );
+
+                // Seed default grading weights for next year
+                const defaultWeights = [
+                    { name: "Attendance", weight: 10 },
+                    { name: "Written Works", weight: 30 },
+                    { name: "Performance Tasks", weight: 40 },
+                    { name: "Quarterly Assessment", weight: 20 },
+                ];
+                for (const w of defaultWeights) {
+                    await db.runAsync(
+                        "INSERT INTO grading_weights (teacherId, name, weight, classId, school_year_id) VALUES (?, ?, ?, NULL, ?)",
+                        [teacherId, w.name, w.weight, nextYearId]
+                    );
+                }
             } else {
                 await db.runAsync(
                     `UPDATE academic_settings 
@@ -593,11 +619,24 @@ export async function markSchoolYearAsCompleted(
                     [teacherId]
                 );
             }
+
+            // 6. Log completion in audit logs
+            await db.runAsync(
+                `INSERT INTO school_year_audit_logs (teacherId, schoolYearId, schoolYear, action, performedBy, notes)
+                 VALUES (?, ?, ?, 'COMPLETED', ?, ?)`,
+                [
+                    teacherId,
+                    academicYearId,
+                    schoolYear,
+                    username.trim(),
+                    `Marked School Year ${schoolYear} as completed. All academic records archived and operational workspace reset.`,
+                ]
+            );
         });
 
         return {
             success: true,
-            message: `School Year ${schoolYear} has been marked as completed and archived to Academic History.`,
+            message: `School Year ${schoolYear} has been marked as completed and archived to Academic History. Your active workspace (My Class, Attendance, and Gradebook) has been cleanly reset.`,
         };
     } catch (error) {
         console.error("Error marking school year as completed:", error);
@@ -606,13 +645,56 @@ export async function markSchoolYearAsCompleted(
 }
 
 /**
- * Permanently delete a single academic record and its student entries
+ * Permanently delete a single academic record and its student entries.
+ * If this was the last record for that school year, also deletes the academic_years entry
+ * so the school year is automatically removed from the year filter and archives.
  */
-export async function deleteAcademicRecord(recordId: number): Promise<{ success: boolean; message: string }> {
+export async function deleteAcademicRecord(recordId: number): Promise<{
+    success: boolean;
+    message: string;
+    schoolYearDeleted?: boolean;
+    schoolYear?: string;
+}> {
     try {
         const db = await getDatabase();
+
+        // 1. Fetch record info to obtain teacherId and schoolYear
+        const record = await db.getFirstAsync<{ teacherId: number; schoolYear: string }>(
+            "SELECT teacherId, schoolYear FROM academic_records WHERE id = ?",
+            [recordId]
+        );
+
+        // 2. Delete the academic record (foreign keys cascade to academic_student_records)
         await db.runAsync("DELETE FROM academic_records WHERE id = ?", [recordId]);
-        return { success: true, message: "Academic record deleted successfully." };
+
+        let schoolYearDeleted = false;
+        const schoolYear = record?.schoolYear;
+
+        if (record) {
+            // Check if any academic records remain for this teacher and school year
+            const remaining = await db.getFirstAsync<{ count: number }>(
+                "SELECT COUNT(*) as count FROM academic_records WHERE teacherId = ? AND schoolYear = ?",
+                [record.teacherId, record.schoolYear]
+            );
+
+            // If no records remain for that school year, remove it from academic_years as well
+            if (!remaining || remaining.count === 0) {
+                await db.runAsync(
+                    "DELETE FROM academic_years WHERE teacherId = ? AND schoolYear = ?",
+                    [record.teacherId, record.schoolYear]
+                );
+                schoolYearDeleted = true;
+            }
+        }
+
+        return {
+            success: true,
+            message: schoolYearDeleted
+                ? `Academic record deleted. S.Y. ${schoolYear} has been removed from your year filter.`
+                : "Academic record deleted successfully.",
+            schoolYearDeleted,
+            schoolYear,
+        };
     } catch (error) {
         console.error("Error deleting academic record:", error);
         return { success: false, message: "Failed to delete academic record." };

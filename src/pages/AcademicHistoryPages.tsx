@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useMemo } from "react";
 import {
     View,
     Text,
@@ -22,6 +22,7 @@ import {
     getAcademicHistory,
     getAcademicRecordDetails,
     deleteAcademicRecord,
+    deleteSchoolYearRecords,
     type AcademicHistoryData,
     type AcademicRecordItem,
     type AcademicRecordDetails,
@@ -38,6 +39,7 @@ export function AcademicHistoryPages() {
 
     // Filters
     const [selectedSchoolYear, setSelectedSchoolYear] = useState<string>(routeSchoolYear || "ALL");
+    const [isYearPickerModalOpen, setIsYearPickerModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
 
     // Details modal
@@ -49,6 +51,10 @@ export function AcademicHistoryPages() {
     // Deletion confirmation modal
     const [deletingRecord, setDeletingRecord] = useState<AcademicRecordItem | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+
+    // Entire school year deletion confirmation modal
+    const [deletingSchoolYear, setDeletingSchoolYear] = useState<string | null>(null);
+    const [isDeletingYear, setIsDeletingYear] = useState(false);
 
     // Dialog notification
     const [dialog, setDialog] = useState({
@@ -104,6 +110,10 @@ export function AcademicHistoryPages() {
 
         setIsDeleting(true);
         try {
+            const deletedSY = deletingRecord.schoolYear;
+            const remainingForYear = (data?.records || []).filter(
+                (r) => r.schoolYear === deletedSY && r.id !== deletingRecord.id
+            ).length;
             const result = await deleteAcademicRecord(deletingRecord.id);
             if (result.success) {
                 setDeletingRecord(null);
@@ -111,12 +121,17 @@ export function AcademicHistoryPages() {
                     setSelectedRecordId(null);
                     setRecordDetails(null);
                 }
+                if (remainingForYear === 0 || selectedSchoolYear === deletedSY) {
+                    setSelectedSchoolYear("ALL");
+                }
                 await loadHistory();
                 setDialog({
                     visible: true,
                     type: "success",
-                    title: "Record Deleted",
-                    message: "The academic record and its student archives have been removed.",
+                    title: remainingForYear === 0 ? "School Year Removed" : "Record Deleted",
+                    message: remainingForYear === 0
+                        ? `The academic record was removed. Since no records remain for S.Y. ${deletedSY}, it has been removed from your year filter.`
+                        : "The academic record and its student archives have been removed.",
                 });
             } else {
                 setDialog({
@@ -131,6 +146,96 @@ export function AcademicHistoryPages() {
         }
     };
 
+    // Confirm Delete Entire School Year Records
+    const handleConfirmDeleteYear = async () => {
+        if (!deletingSchoolYear || isDeletingYear) return;
+
+        setIsDeletingYear(true);
+        try {
+            const syToDelete = deletingSchoolYear;
+            const result = await deleteSchoolYearRecords(username, syToDelete);
+            if (result.success) {
+                setDeletingSchoolYear(null);
+                if (selectedSchoolYear === syToDelete) {
+                    setSelectedSchoolYear("ALL");
+                }
+                if (recordDetails?.schoolYear === syToDelete) {
+                    setSelectedRecordId(null);
+                    setRecordDetails(null);
+                }
+                await loadHistory();
+                setDialog({
+                    visible: true,
+                    type: "success",
+                    title: "School Year Deleted",
+                    message: `All archived records for S.Y. ${syToDelete} have been permanently deleted and removed from the filter.`,
+                });
+            } else {
+                setDialog({
+                    visible: true,
+                    type: "error",
+                    title: "Delete Failed",
+                    message: result.message,
+                });
+            }
+        } finally {
+            setIsDeletingYear(false);
+        }
+    };
+
+    // Available school years for filter picker modal (only years with archived records)
+    const availableSchoolYears = useMemo(() => {
+        const map = new Map<
+            string,
+            {
+                schoolYear: string;
+                status?: "active" | "completed";
+                classCount: number;
+                totalStudents: number;
+            }
+        >();
+
+        // Populate from records
+        for (const r of data?.records || []) {
+            if (r.schoolYear) {
+                const existing = map.get(r.schoolYear);
+                if (existing) {
+                    existing.classCount += 1;
+                    existing.totalStudents += r.studentCount || 0;
+                } else {
+                    map.set(r.schoolYear, {
+                        schoolYear: r.schoolYear,
+                        status: "completed",
+                        classCount: 1,
+                        totalStudents: r.studentCount || 0,
+                    });
+                }
+            }
+        }
+
+        // Cross-reference metadata from data.schoolYears if present
+        for (const sy of data?.schoolYears || []) {
+            if (sy.classCount > 0) {
+                const existing = map.get(sy.schoolYear);
+                if (existing) {
+                    existing.status = sy.status;
+                } else {
+                    map.set(sy.schoolYear, {
+                        schoolYear: sy.schoolYear,
+                        status: sy.status,
+                        classCount: sy.classCount,
+                        totalStudents: sy.totalStudents,
+                    });
+                }
+            }
+        }
+
+        // Sort descending by school year
+        return Array.from(map.values()).sort((a, b) =>
+            b.schoolYear.localeCompare(a.schoolYear, undefined, { numeric: true })
+        );
+    }, [data]);
+
     // Filtered records
     const filteredRecords = (data?.records || []).filter((r) => {
         if (selectedSchoolYear !== "ALL" && r.schoolYear !== selectedSchoolYear) {
@@ -141,7 +246,8 @@ export function AcademicHistoryPages() {
             const nameMatch = r.className.toLowerCase().includes(q);
             const secMatch = (r.section || "").toLowerCase().includes(q);
             const subMatch = (r.subject || "").toLowerCase().includes(q);
-            return nameMatch || secMatch || subMatch;
+            const syMatch = r.schoolYear.toLowerCase().includes(q);
+            return nameMatch || secMatch || subMatch || syMatch;
         }
         return true;
     });
@@ -235,91 +341,85 @@ export function AcademicHistoryPages() {
                         </View>
                     </View>
 
-                    {/* School Year Filter Tabs */}
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={academicHistoryPagesStyle.filterRow}
+                    {/* School Year Filter Button */}
+                    <Pressable
+                        onPress={() => setIsYearPickerModalOpen(true)}
+                        style={({ pressed }) => [
+                            academicHistoryPagesStyle.yearPickerButton,
+                            selectedSchoolYear !== "ALL" && academicHistoryPagesStyle.yearPickerButtonActive,
+                            pressed && academicHistoryPagesStyle.yearPickerButtonPressed,
+                        ]}
                     >
-                        <Pressable
-                            style={[
-                                academicHistoryPagesStyle.yearPill,
-                                selectedSchoolYear === "ALL" && academicHistoryPagesStyle.yearPillActive,
-                            ]}
-                            onPress={() => setSelectedSchoolYear("ALL")}
-                        >
+                        <View style={academicHistoryPagesStyle.yearPickerLeft}>
+                            <Ionicons
+                                name={selectedSchoolYear !== "ALL" ? "calendar" : "calendar-outline"}
+                                size={18}
+                                color={selectedSchoolYear !== "ALL" ? "#4F46E5" : "#64748B"}
+                            />
                             <Text
                                 style={[
-                                    academicHistoryPagesStyle.yearPillText,
-                                    selectedSchoolYear === "ALL" && academicHistoryPagesStyle.yearPillTextActive,
+                                    academicHistoryPagesStyle.yearPickerText,
+                                    selectedSchoolYear !== "ALL" && academicHistoryPagesStyle.yearPickerTextActive,
                                 ]}
+                                numberOfLines={1}
                             >
-                                All School Years
+                                {selectedSchoolYear !== "ALL"
+                                    ? `School Year: S.Y. ${selectedSchoolYear}`
+                                    : "School Year: All School Years"}
                             </Text>
-                        </Pressable>
+                        </View>
+                        {selectedSchoolYear !== "ALL" ? (
+                            <Pressable
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedSchoolYear("ALL");
+                                }}
+                                style={academicHistoryPagesStyle.yearPickerClearBtn}
+                                hitSlop={8}
+                                accessibilityLabel="Clear school year filter"
+                            >
+                                <Ionicons name="close-circle" size={18} color="#4F46E5" />
+                            </Pressable>
+                        ) : (
+                            <Ionicons name="chevron-down" size={16} color="#64748B" />
+                        )}
+                    </Pressable>
 
-                        {(data?.schoolYears || []).map((y) => {
-                            const isSelected = selectedSchoolYear === y.schoolYear;
-                            const isCompleted = y.status === "completed";
-
-                            return (
-                                <Pressable
-                                    key={y.schoolYear}
-                                    style={[
-                                        academicHistoryPagesStyle.yearPill,
-                                        isSelected && academicHistoryPagesStyle.yearPillActive,
-                                    ]}
-                                    onPress={() => setSelectedSchoolYear(y.schoolYear)}
-                                >
-                                    <Text
-                                        style={[
-                                            academicHistoryPagesStyle.yearPillText,
-                                            isSelected && academicHistoryPagesStyle.yearPillTextActive,
-                                        ]}
-                                    >
-                                        A.Y. {y.schoolYear}
+                    {/* Active Filter Indicator Badge */}
+                    {selectedSchoolYear !== "ALL" && (
+                        <View style={academicHistoryPagesStyle.activeFilterBadge}>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1, marginRight: 8 }}>
+                                <Ionicons name="funnel" size={13} color="#4F46E5" />
+                                <Text style={academicHistoryPagesStyle.activeFilterBadgeText} numberOfLines={1}>
+                                    Showing {filteredRecords.length} record{filteredRecords.length === 1 ? "" : "s"} for S.Y. {selectedSchoolYear}
+                                </Text>
+                            </View>
+                            <View style={academicHistoryPagesStyle.activeFilterActions}>
+                                <Pressable onPress={() => setSelectedSchoolYear("ALL")} hitSlop={8}>
+                                    <Text style={academicHistoryPagesStyle.showAllBtnText}>
+                                        Show All
                                     </Text>
-                                    <View
-                                        style={
-                                            isCompleted
-                                                ? academicHistoryPagesStyle.statusBadgeCompleted
-                                                : academicHistoryPagesStyle.statusBadgeActive
-                                        }
-                                    >
-                                        <Text
-                                            style={
-                                                isCompleted
-                                                ? academicHistoryPagesStyle.statusBadgeCompletedText
-                                                : academicHistoryPagesStyle.statusBadgeActiveText
-                                            }
-                                        >
-                                            {isCompleted ? "Completed" : "Active"}
-                                        </Text>
-                                    </View>
                                 </Pressable>
-                            );
-                        })}
-                    </ScrollView>
-
-                    {/* Search Bar if multiple records exist */}
+                                <View style={academicHistoryPagesStyle.filterDivider} />
+                                <Pressable
+                                    onPress={() => setDeletingSchoolYear(selectedSchoolYear)}
+                                    hitSlop={8}
+                                    style={academicHistoryPagesStyle.deleteYearFilterBtn}
+                                >
+                                    <Ionicons name="trash-outline" size={13} color="#DC2626" />
+                                    <Text style={academicHistoryPagesStyle.deleteYearFilterBtnText}>
+                                        Delete Year
+                                    </Text>
+                                </Pressable>
+                            </View>
+                        </View>
+                    )}
+                    {/* Search Bar if records exist */}
                     {(data?.records.length || 0) > 0 && (
-                        <View
-                            style={{
-                                flexDirection: "row",
-                                alignItems: "center",
-                                backgroundColor: "#FFFFFF",
-                                borderWidth: 1,
-                                borderColor: "#E2E8F0",
-                                borderRadius: 14,
-                                paddingHorizontal: 12,
-                                paddingVertical: 10,
-                                marginBottom: 16,
-                                gap: 8,
-                            }}
-                        >
+                        <View style={academicHistoryPagesStyle.searchContainer}>
                             <Ionicons name="search-outline" size={18} color="#94A3B8" />
                             <TextInput
-                                style={{ flex: 1, fontSize: 14, color: "#0F172A", padding: 0 }}
+                                style={academicHistoryPagesStyle.searchInput}
                                 placeholder="Search by class name, section, or subject..."
                                 placeholderTextColor="#94A3B8"
                                 value={searchQuery}
@@ -713,6 +813,15 @@ export function AcademicHistoryPages() {
                             </View>
                         )}
 
+                        {deletingRecord && (data?.records || []).filter((r) => r.schoolYear === deletingRecord.schoolYear).length <= 1 && (
+                            <View style={academicHistoryPagesStyle.singleRecordYearNotice}>
+                                <Ionicons name="information-circle" size={16} color="#B91C1C" />
+                                <Text style={academicHistoryPagesStyle.singleRecordYearNoticeText}>
+                                    This is the only record for S.Y. {deletingRecord.schoolYear}. Deleting it will also remove S.Y. {deletingRecord.schoolYear} from your school year filter.
+                                </Text>
+                            </View>
+                        )}
+
                         <Pressable
                             disabled={isDeleting}
                             onPress={handleConfirmDelete}
@@ -727,12 +836,275 @@ export function AcademicHistoryPages() {
                             )}
                         </Pressable>
 
+                        {deletingRecord && (data?.records || []).filter((r) => r.schoolYear === deletingRecord.schoolYear).length > 1 && (
+                            <Pressable
+                                disabled={isDeleting}
+                                onPress={() => {
+                                    const sy = deletingRecord.schoolYear;
+                                    setDeletingRecord(null);
+                                    setDeletingSchoolYear(sy);
+                                }}
+                                style={academicHistoryPagesStyle.secondaryDangerButton}
+                            >
+                                <Text style={academicHistoryPagesStyle.secondaryDangerButtonText}>
+                                    Delete Entire S.Y. {deletingRecord.schoolYear} Archive
+                                </Text>
+                            </Pressable>
+                        )}
+
                         <Pressable
                             disabled={isDeleting}
                             onPress={() => setDeletingRecord(null)}
                             style={academicHistoryPagesStyle.cancelButton}
                         >
                             <Text style={academicHistoryPagesStyle.cancelButtonText}>Cancel</Text>
+                        </Pressable>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Delete Entire School Year Confirmation Modal */}
+            <Modal
+                visible={deletingSchoolYear !== null}
+                transparent
+                animationType="fade"
+                onRequestClose={() => {
+                    if (!isDeletingYear) setDeletingSchoolYear(null);
+                }}
+            >
+                <View style={academicHistoryPagesStyle.modalOverlay}>
+                    <View style={academicHistoryPagesStyle.modalContent}>
+                        <View style={academicHistoryPagesStyle.warningIconCircle}>
+                            <Ionicons name="trash-outline" size={28} color="#DC2626" />
+                        </View>
+                        <Text style={[academicHistoryPagesStyle.modalTitle, { textAlign: "center" }]}>
+                            Delete School Year Archive
+                        </Text>
+                        <Text style={academicHistoryPagesStyle.deleteWarningText}>
+                            Are you sure you want to delete all academic records for School Year {deletingSchoolYear}? All archived classes, grades, and student performance data for this year will be permanently deleted and removed from the year filter.
+                        </Text>
+                        {deletingSchoolYear && (
+                            <View
+                                style={{
+                                    backgroundColor: "#FEF2F2",
+                                    padding: 12,
+                                    borderRadius: 12,
+                                    borderWidth: 1,
+                                    borderColor: "#FECACA",
+                                    marginBottom: 12,
+                                }}
+                            >
+                                <Text style={{ fontSize: 14, fontWeight: "700", color: "#991B1B", textAlign: "center" }}>
+                                    School Year: S.Y. {deletingSchoolYear}
+                                </Text>
+                                <Text style={{ fontSize: 12, color: "#B91C1C", textAlign: "center", marginTop: 2 }}>
+                                    {(data?.records || []).filter((r) => r.schoolYear === deletingSchoolYear).length} class record(s) will be permanently deleted
+                                </Text>
+                            </View>
+                        )}
+
+                        <Pressable
+                            disabled={isDeletingYear}
+                            onPress={handleConfirmDeleteYear}
+                            style={academicHistoryPagesStyle.dangerButton}
+                        >
+                            {isDeletingYear ? (
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : (
+                                <Text style={academicHistoryPagesStyle.dangerButtonText}>
+                                    Yes, Delete Entire School Year
+                                </Text>
+                            )}
+                        </Pressable>
+
+                        <Pressable
+                            disabled={isDeletingYear}
+                            onPress={() => setDeletingSchoolYear(null)}
+                            style={academicHistoryPagesStyle.cancelButton}
+                        >
+                            <Text style={academicHistoryPagesStyle.cancelButtonText}>Cancel</Text>
+                        </Pressable>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* School Year Picker Modal */}
+            <Modal
+                visible={isYearPickerModalOpen}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setIsYearPickerModalOpen(false)}
+            >
+                <View style={academicHistoryPagesStyle.modalOverlay}>
+                    <View style={academicHistoryPagesStyle.yearPickerModalContent}>
+                        {/* Header */}
+                        <View style={academicHistoryPagesStyle.modalHeader}>
+                            <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 }}>
+                                <View style={academicHistoryPagesStyle.yearPickerHeaderIcon}>
+                                    <Ionicons name="calendar" size={20} color="#4F46E5" />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={academicHistoryPagesStyle.modalTitle}>Select School Year</Text>
+                                    <Text style={academicHistoryPagesStyle.modalSubtitle}>
+                                        Filter academic archives by school year
+                                    </Text>
+                                </View>
+                            </View>
+                            <Pressable
+                                onPress={() => setIsYearPickerModalOpen(false)}
+                                hitSlop={8}
+                                accessibilityLabel="Close year picker"
+                            >
+                                <Ionicons name="close" size={24} color="#64748B" />
+                            </Pressable>
+                        </View>
+
+                        <ScrollView
+                            style={academicHistoryPagesStyle.modalScrollView}
+                            contentContainerStyle={{ paddingBottom: 12 }}
+                            showsVerticalScrollIndicator={false}
+                        >
+                            {/* "All School Years" Option */}
+                            <Pressable
+                                onPress={() => {
+                                    setSelectedSchoolYear("ALL");
+                                    setIsYearPickerModalOpen(false);
+                                }}
+                                style={({ pressed }) => [
+                                    academicHistoryPagesStyle.yearOptionItem,
+                                    selectedSchoolYear === "ALL" && academicHistoryPagesStyle.yearOptionItemActive,
+                                    pressed && academicHistoryPagesStyle.yearOptionItemPressed,
+                                ]}
+                            >
+                                <View style={academicHistoryPagesStyle.yearOptionLeft}>
+                                    <View
+                                        style={[
+                                            academicHistoryPagesStyle.yearOptionIconBox,
+                                            selectedSchoolYear === "ALL" && academicHistoryPagesStyle.yearOptionIconBoxActive,
+                                        ]}
+                                    >
+                                        <Ionicons
+                                            name="albums-outline"
+                                            size={18}
+                                            color={selectedSchoolYear === "ALL" ? "#4F46E5" : "#64748B"}
+                                        />
+                                    </View>
+                                    <View style={academicHistoryPagesStyle.yearOptionTextCol}>
+                                        <Text
+                                            style={[
+                                                academicHistoryPagesStyle.yearOptionTitle,
+                                                selectedSchoolYear === "ALL" && academicHistoryPagesStyle.yearOptionTitleActive,
+                                            ]}
+                                        >
+                                            All School Years
+                                        </Text>
+                                        <Text style={academicHistoryPagesStyle.yearOptionSubtitle}>
+                                            Show all {data?.records.length || 0} archived class records
+                                        </Text>
+                                    </View>
+                                </View>
+                                {selectedSchoolYear === "ALL" && (
+                                    <Ionicons name="checkmark-circle" size={22} color="#4F46E5" />
+                                )}
+                            </Pressable>
+
+                            {/* Available School Years */}
+                            {availableSchoolYears.map((sy) => {
+                                const isSelected = selectedSchoolYear === sy.schoolYear;
+                                const isActiveYear = sy.status === "active";
+
+                                return (
+                                    <Pressable
+                                        key={sy.schoolYear}
+                                        onPress={() => {
+                                            setSelectedSchoolYear(sy.schoolYear);
+                                            setIsYearPickerModalOpen(false);
+                                        }}
+                                        style={({ pressed }) => [
+                                            academicHistoryPagesStyle.yearOptionItem,
+                                            isSelected && academicHistoryPagesStyle.yearOptionItemActive,
+                                            pressed && academicHistoryPagesStyle.yearOptionItemPressed,
+                                        ]}
+                                    >
+                                        <View style={academicHistoryPagesStyle.yearOptionLeft}>
+                                            <View
+                                                style={[
+                                                    academicHistoryPagesStyle.yearOptionIconBox,
+                                                    isSelected && academicHistoryPagesStyle.yearOptionIconBoxActive,
+                                                ]}
+                                            >
+                                                <Ionicons
+                                                    name="school-outline"
+                                                    size={18}
+                                                    color={isSelected ? "#4F46E5" : "#64748B"}
+                                                />
+                                            </View>
+                                            <View style={academicHistoryPagesStyle.yearOptionTextCol}>
+                                                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                                                    <Text
+                                                        style={[
+                                                            academicHistoryPagesStyle.yearOptionTitle,
+                                                            isSelected && academicHistoryPagesStyle.yearOptionTitleActive,
+                                                        ]}
+                                                    >
+                                                        S.Y. {sy.schoolYear}
+                                                    </Text>
+                                                    {isActiveYear ? (
+                                                        <View style={academicHistoryPagesStyle.statusBadgeActive}>
+                                                            <Text style={academicHistoryPagesStyle.statusBadgeActiveText}>
+                                                                Active
+                                                            </Text>
+                                                        </View>
+                                                    ) : (
+                                                        <View style={academicHistoryPagesStyle.statusBadgeCompleted}>
+                                                            <Text style={academicHistoryPagesStyle.statusBadgeCompletedText}>
+                                                                Completed
+                                                            </Text>
+                                                        </View>
+                                                    )}
+                                                </View>
+                                                <Text style={academicHistoryPagesStyle.yearOptionSubtitle}>
+                                                    {sy.classCount} class{sy.classCount === 1 ? "" : "es"}
+                                                    {sy.totalStudents > 0 ? ` • ${sy.totalStudents} students` : ""}
+                                                </Text>
+                                            </View>
+                                        </View>
+
+                                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                                            {isSelected && (
+                                                <Ionicons name="checkmark-circle" size={22} color="#4F46E5" />
+                                            )}
+                                            <Pressable
+                                                onPress={(e) => {
+                                                    e.stopPropagation();
+                                                    setIsYearPickerModalOpen(false);
+                                                    setDeletingSchoolYear(sy.schoolYear);
+                                                }}
+                                                hitSlop={8}
+                                                style={academicHistoryPagesStyle.yearItemDeleteBtn}
+                                                accessibilityLabel={`Delete all records for S.Y. ${sy.schoolYear}`}
+                                            >
+                                                <Ionicons name="trash-outline" size={17} color="#DC2626" />
+                                            </Pressable>
+                                        </View>
+                                    </Pressable>
+                                );
+                            })}
+
+                            {availableSchoolYears.length === 0 && (
+                                <View style={{ paddingVertical: 20, alignItems: "center" }}>
+                                    <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center" }}>
+                                        No archived school years found yet.
+                                    </Text>
+                                </View>
+                            )}
+                        </ScrollView>
+
+                        <Pressable
+                            style={academicHistoryPagesStyle.cancelButton}
+                            onPress={() => setIsYearPickerModalOpen(false)}
+                        >
+                            <Text style={academicHistoryPagesStyle.cancelButtonText}>Close</Text>
                         </Pressable>
                     </View>
                 </View>

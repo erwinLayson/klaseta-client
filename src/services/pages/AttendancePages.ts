@@ -55,6 +55,17 @@ export async function createAttendanceSession(
             return { success: false, message: "Selected class does not exist or does not belong to your account." };
         }
 
+        const settings = await db.getFirstAsync<{ status: string }>(
+            "SELECT status FROM academic_settings WHERE teacherId = ?",
+            [teacher.id]
+        );
+        if (settings?.status === "completed") {
+            return {
+                success: false,
+                message: "Current school year is marked as completed. Please start a new school year in Settings before creating attendance sessions.",
+            };
+        }
+
         const sessionTitle = title?.trim() ? title.trim() : null;
         const sessionQuarter = quarter?.trim() ? quarter.trim() : "Q1";
         const activeYear = await getActiveSchoolYear(username);
@@ -91,6 +102,16 @@ export async function getAttendanceSpreadsheet(
         );
 
         if (!teacher) {
+            return { students: [], sessions: [], recordsMap: {} };
+        }
+
+        const settings = await db.getFirstAsync<{ status: string }>(
+            "SELECT status FROM academic_settings WHERE teacherId = ?",
+            [teacher.id]
+        );
+
+        // When school year is marked completed, the operational attendance sheet is cleanly reset
+        if (settings?.status === "completed") {
             return { students: [], sessions: [], recordsMap: {} };
         }
 
