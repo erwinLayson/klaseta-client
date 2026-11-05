@@ -518,10 +518,14 @@ export const styles = StyleSheet.create({
         color: "#4F46E5",
     },
     cancelButton: {
+        width: "100%",
         alignItems: "center",
         justifyContent: "center",
         paddingVertical: 12,
         marginTop: 8,
+    },
+    cancelButtonPressed: {
+        opacity: 0.7,
     },
     cancelButtonText: {
         fontSize: 14,
@@ -883,10 +887,10 @@ export const styles = StyleSheet.create({
 
     // Delete Session Modal
     dangerButton: {
-        flex: 1.2,
+        width: "100%",
         backgroundColor: "#DC2626",
-        paddingVertical: 13,
-        borderRadius: 12,
+        paddingVertical: 14,
+        borderRadius: 14,
         alignItems: "center",
         justifyContent: "center",
         shadowColor: "#DC2626",
@@ -894,13 +898,15 @@ export const styles = StyleSheet.create({
         shadowOpacity: 0.25,
         shadowRadius: 6,
         elevation: 3,
+        marginTop: 12,
     },
     dangerButtonPressed: {
         backgroundColor: "#B91C1C",
+        transform: [{ scale: 0.99 }],
     },
     dangerButtonText: {
         color: "#FFFFFF",
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: "700",
     },
     modalActionsRow: {

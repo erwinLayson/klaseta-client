@@ -187,9 +187,11 @@ export function AttendancePages() {
     // Calculate unsaved changes count
     const unsavedCount = useMemo(() => {
         let count = 0;
-        for (const [key, val] of Object.entries(recordsMap)) {
-            const effectiveVal = val === "" ? (savedRecordsMap[key] || "1") : val;
-            if (savedRecordsMap[key] !== effectiveVal) {
+        const allKeys = new Set([...Object.keys(savedRecordsMap), ...Object.keys(recordsMap)]);
+        for (const key of allKeys) {
+            const currentVal = recordsMap[key] ?? "";
+            const savedVal = savedRecordsMap[key] ?? "";
+            if (currentVal !== savedVal) {
                 count++;
             }
         }
@@ -367,19 +369,14 @@ export function AttendancePages() {
         if (validChars.length > 0) {
             const latest = validChars.slice(-1) as "1" | "0";
             setRecordsMap((prev) => ({ ...prev, [key]: latest }));
+        } else {
+            setRecordsMap((prev) => ({ ...prev, [key]: "" }));
         }
     };
 
-    // If blurred while empty, restore to saved value or default to "1"
-    const handleStatusBlur = (sessionId: number, studentId: number) => {
-        const key = `${studentId}_${sessionId}`;
-        setRecordsMap((prev) => {
-            if (!prev[key]) {
-                const fallback = savedRecordsMap[key] || "1";
-                return { ...prev, [key]: fallback };
-            }
-            return prev;
-        });
+    // If blurred, do not force any default status so empty cells remain empty
+    const handleStatusBlur = (_sessionId: number, _studentId: number) => {
+        // Keep entered value or empty state as is
     };
 
     // Manual Save All button action inside table header
@@ -395,17 +392,22 @@ export function AttendancePages() {
             }[] = [];
             const deletedKeys: { sessionId: number; studentId: number }[] = [];
 
-            for (const [key, status] of Object.entries(recordsMap)) {
+            const allKeys = new Set([...Object.keys(savedRecordsMap), ...Object.keys(recordsMap)]);
+            for (const key of allKeys) {
                 const [studentIdStr, sessionIdStr] = key.split("_");
                 const studentId = Number(studentIdStr);
                 const sessionId = Number(sessionIdStr);
 
                 if (!isNaN(studentId) && !isNaN(sessionId)) {
-                    if (status === "") {
+                    const status = recordsMap[key] || "";
+                    const hasSavedRecord = savedRecordsMap[key] !== undefined;
+
+                    if (status === "" && hasSavedRecord) {
+                        // Was in database, now cleared by teacher -> delete from DB
                         deletedKeys.push({ sessionId, studentId });
-                    } else {
-                        const finalStatus: "1" | "0" = status === "0" ? "0" : "1";
-                        recordsToSave.push({ sessionId, studentId, status: finalStatus });
+                    } else if (status === "1" || status === "0") {
+                        // Mark or updated status -> upsert to DB
+                        recordsToSave.push({ sessionId, studentId, status });
                     }
                 }
             }
@@ -415,8 +417,8 @@ export function AttendancePages() {
             if (success) {
                 const normalizedMap: Record<string, "1" | "0"> = {};
                 for (const [k, v] of Object.entries(recordsMap)) {
-                    if (v !== "") {
-                        normalizedMap[k] = v === "0" ? "0" : "1";
+                    if (v === "1" || v === "0") {
+                        normalizedMap[k] = v;
                     }
                 }
                 setRecordsMap(normalizedMap);
@@ -452,7 +454,7 @@ export function AttendancePages() {
         }
 
         const totalEntries = presentCount + absentCount;
-        const rate = totalEntries > 0 ? Math.round((presentCount / totalEntries) * 100) : 100;
+        const rate = totalEntries > 0 ? Math.round((presentCount / totalEntries) * 100) : 0;
 
         return {
             totalSessions: sessions.length,
@@ -709,441 +711,437 @@ export function AttendancePages() {
 
                         {/* Stats Summary */}
                         <View style={attendancePagesStyle.statsRow}>
-                    <View style={attendancePagesStyle.statCard}>
-                        <Text style={attendancePagesStyle.statValue}>
-                            {stats.totalSessions}
-                        </Text>
-                        <Text style={attendancePagesStyle.statLabel}>Sessions</Text>
-                    </View>
-                    <View style={attendancePagesStyle.statCard}>
-                        <Text style={[attendancePagesStyle.statValue, { color: "#16A34A" }]}>
-                            {stats.presentCount}
-                        </Text>
-                        <Text style={attendancePagesStyle.statLabel}>Present (1)</Text>
-                    </View>
-                    <View style={attendancePagesStyle.statCard}>
-                        <Text style={[attendancePagesStyle.statValue, { color: "#DC2626" }]}>
-                            {stats.absentCount}
-                        </Text>
-                        <Text style={attendancePagesStyle.statLabel}>Absent (0)</Text>
-                    </View>
-                    <View style={attendancePagesStyle.statCard}>
-                        <Text style={[attendancePagesStyle.statValue, { color: "#4F46E5" }]}>
-                            {stats.attendanceRate}
-                        </Text>
-                        <Text style={attendancePagesStyle.statLabel}>Rate</Text>
-                    </View>
-                </View>
+                            <View style={attendancePagesStyle.statCard}>
+                                <Text style={attendancePagesStyle.statValue}>
+                                    {stats.totalSessions}
+                                </Text>
+                                <Text style={attendancePagesStyle.statLabel}>Sessions</Text>
+                            </View>
+                            <View style={attendancePagesStyle.statCard}>
+                                <Text style={[attendancePagesStyle.statValue, { color: "#16A34A" }]}>
+                                    {stats.presentCount}
+                                </Text>
+                                <Text style={attendancePagesStyle.statLabel}>Present (1)</Text>
+                            </View>
+                            <View style={attendancePagesStyle.statCard}>
+                                <Text style={[attendancePagesStyle.statValue, { color: "#DC2626" }]}>
+                                    {stats.absentCount}
+                                </Text>
+                                <Text style={attendancePagesStyle.statLabel}>Absent (0)</Text>
+                            </View>
+                            <View style={attendancePagesStyle.statCard}>
+                                <Text style={[attendancePagesStyle.statValue, { color: "#4F46E5" }]}>
+                                    {stats.attendanceRate}
+                                </Text>
+                                <Text style={attendancePagesStyle.statLabel}>Rate</Text>
+                            </View>
+                        </View>
 
-                {/* Spreadsheet Section */}
-                <View style={attendancePagesStyle.section}>
-                    {/* Attendance Table Header Bar with Save All & Unsaved Indicator */}
-                    <View style={attendancePagesStyle.sectionHeaderRow}>
-                        <View style={attendancePagesStyle.sectionHeaderLeft}>
-                            <Text style={attendancePagesStyle.sectionTitle}>
-                                Attendance History
-                            </Text>
-                            <View style={attendancePagesStyle.sessionCountBadge}>
-                                <Text style={attendancePagesStyle.sessionCountBadgeText}>
-                                    {filteredStudents.length} of {students.length} students
-                                </Text>
-                            </View>
-                            <View style={attendancePagesStyle.sessionCountBadge}>
-                                <Text style={attendancePagesStyle.sessionCountBadgeText}>
-                                    {filteredSessions.length} of {sessions.length} sessions
-                                </Text>
-                            </View>
-                            {hasUnsavedChanges && (
-                                <View style={attendancePagesStyle.unsavedBadge}>
-                                    <Ionicons name="alert-circle" size={12} color="#D97706" />
-                                    <Text style={attendancePagesStyle.unsavedBadgeText}>
-                                        {unsavedCount} unsaved
+                        {/* Spreadsheet Section */}
+                        <View style={attendancePagesStyle.section}>
+                            {/* Attendance Table Header Bar with Save All & Unsaved Indicator */}
+                            <View style={attendancePagesStyle.sectionHeaderRow}>
+                                <View style={attendancePagesStyle.sectionHeaderLeft}>
+                                    <Text style={attendancePagesStyle.sectionTitle}>
+                                        Attendance History
                                     </Text>
-                                </View>
-                            )}
-                        </View>
-                    </View>
-
-                    {/* Horizontal Flexbox Row: Search Filter, Filter by Date, and Save All Button */}
-                    <View style={attendancePagesStyle.controlsRow}>
-                        {/* 1. Search Filter by Student Name */}
-                        <View style={attendancePagesStyle.filterInputWrapper}>
-                            <Ionicons name="search-outline" size={17} color="#4F46E5" />
-                            <TextInput
-                                style={attendancePagesStyle.filterInput}
-                                placeholder="Search student..."
-                                placeholderTextColor="#94A3B8"
-                                value={nameQuery}
-                                onChangeText={setNameQuery}
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                            />
-                            {nameQuery.length > 0 && (
-                                <Pressable
-                                    onPress={() => setNameQuery("")}
-                                    style={attendancePagesStyle.filterClearButton}
-                                    hitSlop={8}
-                                >
-                                    <Ionicons name="close-circle" size={16} color="#94A3B8" />
-                                </Pressable>
-                            )}
-                        </View>
-
-                        {/* 2. Filter Attendance by Specific Date */}
-                        <Pressable
-                            onPress={() => setIsDateSelectModalOpen(true)}
-                            style={({ pressed }) => [
-                                attendancePagesStyle.filterSelectWrapper,
-                                selectedDate !== "" && attendancePagesStyle.filterSelectWrapperActive,
-                                pressed && attendancePagesStyle.filterSelectWrapperPressed,
-                            ]}
-                        >
-                            <View style={attendancePagesStyle.filterSelectLeft}>
-                                <Ionicons
-                                    name={selectedDate ? "calendar" : "calendar-outline"}
-                                    size={17}
-                                    color={selectedDate ? "#059669" : "#64748B"}
-                                />
-                                <Text
-                                    style={[
-                                        attendancePagesStyle.filterSelectValue,
-                                        !selectedDate && attendancePagesStyle.filterSelectPlaceholder,
-                                    ]}
-                                    numberOfLines={1}
-                                >
-                                    {selectedDate ? formatDateHeader(selectedDate) : "Select date..."}
-                                </Text>
-                            </View>
-
-                            <View style={attendancePagesStyle.filterSelectRight}>
-                                {selectedDate !== "" ? (
-                                    <Pressable
-                                        onPress={(e) => {
-                                            e.stopPropagation();
-                                            setSelectedDate("");
-                                        }}
-                                        hitSlop={8}
-                                        style={attendancePagesStyle.filterClearButton}
-                                    >
-                                        <Ionicons name="close-circle" size={16} color="#94A3B8" />
-                                    </Pressable>
-                                ) : (
-                                    <Ionicons name="chevron-down" size={15} color="#64748B" />
-                                )}
-                            </View>
-                        </Pressable>
-
-                        {/* 3. Save All Button */}
-                        <Pressable
-                            onPress={handleSaveAll}
-                            disabled={isSaving || !hasUnsavedChanges}
-                            style={({ pressed }) => [
-                                attendancePagesStyle.saveAllButton,
-                                !hasUnsavedChanges && attendancePagesStyle.saveAllButtonDisabled,
-                                pressed && hasUnsavedChanges && attendancePagesStyle.saveAllButtonPressed,
-                            ]}
-                        >
-                            {isSaving ? (
-                                <ActivityIndicator size="small" color="#FFFFFF" />
-                            ) : (
-                                <Ionicons
-                                    name="save-outline"
-                                    size={15}
-                                    color={hasUnsavedChanges ? "#FFFFFF" : "#94A3B8"}
-                                />
-                            )}
-                            <Text
-                                style={[
-                                    attendancePagesStyle.saveAllButtonText,
-                                    !hasUnsavedChanges && attendancePagesStyle.saveAllButtonTextDisabled,
-                                ]}
-                            >
-                                {isSaving ? "Saving..." : "Save All"}
-                            </Text>
-                        </Pressable>
-                    </View>
-
-                    {/* Status Legend (1 for Present, 0 for Absent) */}
-                    <View style={attendancePagesStyle.legendRow}>
-                        <View style={attendancePagesStyle.legendItems}>
-                            <View style={attendancePagesStyle.legendItem}>
-                                <View
-                                    style={[
-                                        attendancePagesStyle.legendBadge,
-                                        attendancePagesStyle.statusInputPresent,
-                                    ]}
-                                >
-                                    <Text
-                                        style={[
-                                            attendancePagesStyle.legendBadgeText,
-                                            { color: "#15803D" },
-                                        ]}
-                                    >
-                                        1
-                                    </Text>
-                                </View>
-                                <Text style={attendancePagesStyle.legendText}>Present</Text>
-                            </View>
-
-                            <View style={attendancePagesStyle.legendItem}>
-                                <View
-                                    style={[
-                                        attendancePagesStyle.legendBadge,
-                                        attendancePagesStyle.statusInputAbsent,
-                                    ]}
-                                >
-                                    <Text
-                                        style={[
-                                            attendancePagesStyle.legendBadgeText,
-                                            { color: "#B91C1C" },
-                                        ]}
-                                    >
-                                        0
-                                    </Text>
-                                </View>
-                                <Text style={attendancePagesStyle.legendText}>Absent</Text>
-                            </View>
-                        </View>
-                        <Text style={attendancePagesStyle.legendHint}>
-                            Type 1 for Present, 0 for Absent
-                        </Text>
-                    </View>
-
-                    {/* Spreadsheet Table View */}
-                    {students.length === 0 ? (
-                        <View style={attendancePagesStyle.emptyCard}>
-                            <Ionicons
-                                name="people-outline"
-                                size={44}
-                                color="#94A3B8"
-                                style={attendancePagesStyle.emptyIcon}
-                            />
-                            <Text style={attendancePagesStyle.emptyText}>No students in your class</Text>
-                            <Text style={attendancePagesStyle.emptySubtext}>
-                                Add students in the My Class tab before creating an attendance session.
-                            </Text>
-                        </View>
-                    ) : sessions.length === 0 ? (
-                        <View style={attendancePagesStyle.emptyCard}>
-                            <Ionicons
-                                name="calendar-outline"
-                                size={44}
-                                color="#94A3B8"
-                                style={attendancePagesStyle.emptyIcon}
-                            />
-                            <Text style={attendancePagesStyle.emptyText}>No attendance sessions yet</Text>
-                            <Text style={attendancePagesStyle.emptySubtext}>
-                                Create a daily attendance session to start tracking your students&apos; presence.
-                            </Text>
-                            <Pressable
-                                onPress={handleOpenCreateModal}
-                                style={({ pressed }) => [
-                                    attendancePagesStyle.createButton,
-                                    pressed && attendancePagesStyle.createButtonPressed,
-                                ]}
-                            >
-                                <Ionicons name="add" size={18} color="#FFFFFF" />
-                                <Text style={attendancePagesStyle.createButtonText}>
-                                    Create First Session
-                                </Text>
-                            </Pressable>
-                        </View>
-                    ) : filteredStudents.length === 0 ? (
-                        <View style={attendancePagesStyle.emptyCard}>
-                            <Ionicons
-                                name="person-outline"
-                                size={36}
-                                color="#94A3B8"
-                                style={attendancePagesStyle.emptyIcon}
-                            />
-                            <Text style={attendancePagesStyle.emptyText}>
-                                No students found matching &quot;{nameQuery}&quot;
-                            </Text>
-                            <Text style={attendancePagesStyle.emptySubtext}>
-                                Try searching with a different name or spelling.
-                            </Text>
-                            <Pressable
-                                onPress={() => setNameQuery("")}
-                                style={attendancePagesStyle.clearFilterButton}
-                            >
-                                <Text style={attendancePagesStyle.clearFilterButtonText}>
-                                    Clear Name Filter
-                                </Text>
-                            </Pressable>
-                        </View>
-                    ) : filteredSessions.length === 0 ? (
-                        <View style={attendancePagesStyle.emptyCard}>
-                            <Ionicons
-                                name="calendar-outline"
-                                size={36}
-                                color="#94A3B8"
-                                style={attendancePagesStyle.emptyIcon}
-                            />
-                            <Text style={attendancePagesStyle.emptyText}>
-                                No sessions found for &quot;{formatFullDate(selectedDate)}&quot;
-                            </Text>
-                            <Text style={attendancePagesStyle.emptySubtext}>
-                                There are no attendance sessions recorded for this specific date.
-                            </Text>
-                            <Pressable
-                                onPress={() => setSelectedDate("")}
-                                style={attendancePagesStyle.clearFilterButton}
-                            >
-                                <Text style={attendancePagesStyle.clearFilterButtonText}>
-                                    Show All Dates
-                                </Text>
-                            </Pressable>
-                        </View>
-                    ) : (
-                        <View style={attendancePagesStyle.spreadsheetCard}>
-                            <View style={attendancePagesStyle.spreadsheetWrapper}>
-                                {/* First Column: Fixed Student Names */}
-                                <View style={attendancePagesStyle.studentFixedColumn}>
-                                    {/* Header Cell */}
-                                    <View style={attendancePagesStyle.studentHeaderCell}>
-                                        <Text style={attendancePagesStyle.studentHeaderCellText}>
-                                            Student Name
+                                    <View style={attendancePagesStyle.sessionCountBadge}>
+                                        <Text style={attendancePagesStyle.sessionCountBadgeText}>
+                                            {filteredStudents.length} of {students.length} students
                                         </Text>
                                     </View>
 
-                                    {/* Student Rows */}
-                                    {filteredStudents.map((student, idx) => (
-                                        <View
-                                            key={student.id}
+                                    {hasUnsavedChanges && (
+                                        <View style={attendancePagesStyle.unsavedBadge}>
+                                            <Ionicons name="alert-circle" size={12} color="#D97706" />
+                                            <Text style={attendancePagesStyle.unsavedBadgeText}>
+                                                {unsavedCount} unsaved
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
+                            </View>
+
+                            {/* Horizontal Flexbox Row: Search Filter, Filter by Date, and Save All Button */}
+                            <View style={attendancePagesStyle.controlsRow}>
+                                {/* 1. Search Filter by Student Name */}
+                                <View style={attendancePagesStyle.filterInputWrapper}>
+                                    <Ionicons name="search-outline" size={17} color="#4F46E5" />
+                                    <TextInput
+                                        style={attendancePagesStyle.filterInput}
+                                        placeholder="Search student..."
+                                        placeholderTextColor="#94A3B8"
+                                        value={nameQuery}
+                                        onChangeText={setNameQuery}
+                                        autoCapitalize="none"
+                                        autoCorrect={false}
+                                    />
+                                    {nameQuery.length > 0 && (
+                                        <Pressable
+                                            onPress={() => setNameQuery("")}
+                                            style={attendancePagesStyle.filterClearButton}
+                                            hitSlop={8}
+                                        >
+                                            <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                                        </Pressable>
+                                    )}
+                                </View>
+
+                                {/* 2. Filter Attendance by Specific Date */}
+                                <Pressable
+                                    onPress={() => setIsDateSelectModalOpen(true)}
+                                    style={({ pressed }) => [
+                                        attendancePagesStyle.filterSelectWrapper,
+                                        selectedDate !== "" && attendancePagesStyle.filterSelectWrapperActive,
+                                        pressed && attendancePagesStyle.filterSelectWrapperPressed,
+                                    ]}
+                                >
+                                    <View style={attendancePagesStyle.filterSelectLeft}>
+                                        <Ionicons
+                                            name={selectedDate ? "calendar" : "calendar-outline"}
+                                            size={17}
+                                            color={selectedDate ? "#059669" : "#64748B"}
+                                        />
+                                        <Text
                                             style={[
-                                                attendancePagesStyle.studentRowCell,
-                                                idx % 2 === 0
-                                                    ? attendancePagesStyle.rowEven
-                                                    : attendancePagesStyle.rowOdd,
+                                                attendancePagesStyle.filterSelectValue,
+                                                !selectedDate && attendancePagesStyle.filterSelectPlaceholder,
+                                            ]}
+                                            numberOfLines={1}
+                                        >
+                                            {selectedDate ? formatDateHeader(selectedDate) : "Select date..."}
+                                        </Text>
+                                    </View>
+
+                                    <View style={attendancePagesStyle.filterSelectRight}>
+                                        {selectedDate !== "" ? (
+                                            <Pressable
+                                                onPress={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedDate("");
+                                                }}
+                                                hitSlop={8}
+                                                style={attendancePagesStyle.filterClearButton}
+                                            >
+                                                <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                                            </Pressable>
+                                        ) : (
+                                            <Ionicons name="chevron-down" size={15} color="#64748B" />
+                                        )}
+                                    </View>
+                                </Pressable>
+
+                                {/* 3. Save All Button */}
+                                <Pressable
+                                    onPress={handleSaveAll}
+                                    disabled={isSaving || !hasUnsavedChanges}
+                                    style={({ pressed }) => [
+                                        attendancePagesStyle.saveAllButton,
+                                        !hasUnsavedChanges && attendancePagesStyle.saveAllButtonDisabled,
+                                        pressed && hasUnsavedChanges && attendancePagesStyle.saveAllButtonPressed,
+                                    ]}
+                                >
+                                    {isSaving ? (
+                                        <ActivityIndicator size="small" color="#FFFFFF" />
+                                    ) : (
+                                        <Ionicons
+                                            name="save-outline"
+                                            size={15}
+                                            color={hasUnsavedChanges ? "#FFFFFF" : "#94A3B8"}
+                                        />
+                                    )}
+                                    <Text
+                                        style={[
+                                            attendancePagesStyle.saveAllButtonText,
+                                            !hasUnsavedChanges && attendancePagesStyle.saveAllButtonTextDisabled,
+                                        ]}
+                                    >
+                                        {isSaving ? "Saving..." : "Save All"}
+                                    </Text>
+                                </Pressable>
+                            </View>
+
+                            {/* Status Legend (1 for Present, 0 for Absent) */}
+                            <View style={attendancePagesStyle.legendRow}>
+                                <View style={attendancePagesStyle.legendItems}>
+                                    <View style={attendancePagesStyle.legendItem}>
+                                        <View
+                                            style={[
+                                                attendancePagesStyle.legendBadge,
+                                                attendancePagesStyle.statusInputPresent,
                                             ]}
                                         >
                                             <Text
-                                                style={attendancePagesStyle.studentRowText}
-                                                numberOfLines={1}
+                                                style={[
+                                                    attendancePagesStyle.legendBadgeText,
+                                                    { color: "#15803D" },
+                                                ]}
                                             >
-                                                {student.firstname} {student.lastname}
+                                                1
                                             </Text>
                                         </View>
-                                    ))}
-                                </View>
+                                        <Text style={attendancePagesStyle.legendText}>Present</Text>
+                                    </View>
 
-                                {/* Horizontally Scrollable Date Columns */}
-                                <ScrollView
-                                    horizontal
-                                    showsHorizontalScrollIndicator={true}
-                                    keyboardShouldPersistTaps="handled"
-                                >
-                                    <View>
-                                        {/* Date Columns Header Row */}
-                                        <View style={{ flexDirection: "row" }}>
-                                            {filteredSessions.map((session) => (
+                                    <View style={attendancePagesStyle.legendItem}>
+                                        <View
+                                            style={[
+                                                attendancePagesStyle.legendBadge,
+                                                attendancePagesStyle.statusInputAbsent,
+                                            ]}
+                                        >
+                                            <Text
+                                                style={[
+                                                    attendancePagesStyle.legendBadgeText,
+                                                    { color: "#B91C1C" },
+                                                ]}
+                                            >
+                                                0
+                                            </Text>
+                                        </View>
+                                        <Text style={attendancePagesStyle.legendText}>Absent</Text>
+                                    </View>
+                                </View>
+                                <Text style={attendancePagesStyle.legendHint}>
+                                    Type 1 for Present, 0 for Absent
+                                </Text>
+                            </View>
+
+                            {/* Spreadsheet Table View */}
+                            {students.length === 0 ? (
+                                <View style={attendancePagesStyle.emptyCard}>
+                                    <Ionicons
+                                        name="people-outline"
+                                        size={44}
+                                        color="#94A3B8"
+                                        style={attendancePagesStyle.emptyIcon}
+                                    />
+                                    <Text style={attendancePagesStyle.emptyText}>No students in your class</Text>
+                                    <Text style={attendancePagesStyle.emptySubtext}>
+                                        Add students in the My Class tab before creating an attendance session.
+                                    </Text>
+                                </View>
+                            ) : sessions.length === 0 ? (
+                                <View style={attendancePagesStyle.emptyCard}>
+                                    <Ionicons
+                                        name="calendar-outline"
+                                        size={44}
+                                        color="#94A3B8"
+                                        style={attendancePagesStyle.emptyIcon}
+                                    />
+                                    <Text style={attendancePagesStyle.emptyText}>No attendance sessions yet</Text>
+                                    <Text style={attendancePagesStyle.emptySubtext}>
+                                        Create a daily attendance session to start tracking your students&apos; presence.
+                                    </Text>
+                                    <Pressable
+                                        onPress={handleOpenCreateModal}
+                                        style={({ pressed }) => [
+                                            attendancePagesStyle.createButton,
+                                            pressed && attendancePagesStyle.createButtonPressed,
+                                        ]}
+                                    >
+                                        <Ionicons name="add" size={18} color="#FFFFFF" />
+                                        <Text style={attendancePagesStyle.createButtonText}>
+                                            Create First Session
+                                        </Text>
+                                    </Pressable>
+                                </View>
+                            ) : filteredStudents.length === 0 ? (
+                                <View style={attendancePagesStyle.emptyCard}>
+                                    <Ionicons
+                                        name="person-outline"
+                                        size={36}
+                                        color="#94A3B8"
+                                        style={attendancePagesStyle.emptyIcon}
+                                    />
+                                    <Text style={attendancePagesStyle.emptyText}>
+                                        No students found matching &quot;{nameQuery}&quot;
+                                    </Text>
+                                    <Text style={attendancePagesStyle.emptySubtext}>
+                                        Try searching with a different name or spelling.
+                                    </Text>
+                                    <Pressable
+                                        onPress={() => setNameQuery("")}
+                                        style={attendancePagesStyle.clearFilterButton}
+                                    >
+                                        <Text style={attendancePagesStyle.clearFilterButtonText}>
+                                            Clear Name Filter
+                                        </Text>
+                                    </Pressable>
+                                </View>
+                            ) : filteredSessions.length === 0 ? (
+                                <View style={attendancePagesStyle.emptyCard}>
+                                    <Ionicons
+                                        name="calendar-outline"
+                                        size={36}
+                                        color="#94A3B8"
+                                        style={attendancePagesStyle.emptyIcon}
+                                    />
+                                    <Text style={attendancePagesStyle.emptyText}>
+                                        No sessions found for &quot;{formatFullDate(selectedDate)}&quot;
+                                    </Text>
+                                    <Text style={attendancePagesStyle.emptySubtext}>
+                                        There are no attendance sessions recorded for this specific date.
+                                    </Text>
+                                    <Pressable
+                                        onPress={() => setSelectedDate("")}
+                                        style={attendancePagesStyle.clearFilterButton}
+                                    >
+                                        <Text style={attendancePagesStyle.clearFilterButtonText}>
+                                            Show All Dates
+                                        </Text>
+                                    </Pressable>
+                                </View>
+                            ) : (
+                                <View style={attendancePagesStyle.spreadsheetCard}>
+                                    <View style={attendancePagesStyle.spreadsheetWrapper}>
+                                        {/* First Column: Fixed Student Names */}
+                                        <View style={attendancePagesStyle.studentFixedColumn}>
+                                            {/* Header Cell */}
+                                            <View style={attendancePagesStyle.studentHeaderCell}>
+                                                <Text style={attendancePagesStyle.studentHeaderCellText}>
+                                                    Student Name
+                                                </Text>
+                                            </View>
+
+                                            {/* Student Rows */}
+                                            {filteredStudents.map((student, idx) => (
                                                 <View
-                                                    key={session.id}
-                                                    style={attendancePagesStyle.dateHeaderCell}
+                                                    key={student.id}
+                                                    style={[
+                                                        attendancePagesStyle.studentRowCell,
+                                                        idx % 2 === 0
+                                                            ? attendancePagesStyle.rowEven
+                                                            : attendancePagesStyle.rowOdd,
+                                                    ]}
                                                 >
-                                                    <View style={attendancePagesStyle.dateHeaderTopRow}>
-                                                        <Text style={attendancePagesStyle.dateHeaderText}>
-                                                            {formatDateHeader(session.date)}
-                                                        </Text>
-                                                        <View style={attendancePagesStyle.headerActionIcons}>
-                                                            <Pressable
-                                                                onPress={() => handleOpenEditModal(session)}
-                                                                style={({ pressed }) => [
-                                                                    attendancePagesStyle.actionIconBtn,
-                                                                    pressed && attendancePagesStyle.actionIconBtnPressed,
-                                                                ]}
-                                                                hitSlop={6}
-                                                                accessibilityLabel="Edit attendance session"
-                                                            >
-                                                                <Ionicons name="pencil" size={11} color="#4F46E5" />
-                                                            </Pressable>
-                                                            <Pressable
-                                                                onPress={() => setDeletingSession(session)}
-                                                                style={({ pressed }) => [
-                                                                    attendancePagesStyle.actionIconBtn,
-                                                                    pressed && attendancePagesStyle.actionIconBtnPressed,
-                                                                ]}
-                                                                hitSlop={6}
-                                                                accessibilityLabel="Delete attendance session"
-                                                            >
-                                                                <Ionicons name="trash-outline" size={11} color="#EF4444" />
-                                                            </Pressable>
-                                                        </View>
-                                                    </View>
                                                     <Text
-                                                        style={attendancePagesStyle.dateHeaderSubtext}
+                                                        style={attendancePagesStyle.studentRowText}
                                                         numberOfLines={1}
                                                     >
-                                                        {session.title ? session.title : session.date}
+                                                        {student.firstname} {student.lastname}
                                                     </Text>
                                                 </View>
                                             ))}
                                         </View>
 
-                                        {/* Attendance Status Cells per Student Row */}
-                                        {filteredStudents.map((student, rowIdx) => (
-                                            <View
-                                                key={student.id}
-                                                style={[
-                                                    { flexDirection: "row" },
-                                                    rowIdx % 2 === 0
-                                                        ? attendancePagesStyle.rowEven
-                                                        : attendancePagesStyle.rowOdd,
-                                                ]}
-                                            >
-                                                {filteredSessions.map((session) => {
-                                                    const key = `${student.id}_${session.id}`;
-                                                    const status = recordsMap[key] !== undefined ? recordsMap[key] : "1";
-                                                    const isPresent = status === "1";
-                                                    const isAbsent = status === "0";
-
-                                                    return (
+                                        {/* Horizontally Scrollable Date Columns */}
+                                        <ScrollView
+                                            horizontal
+                                            showsHorizontalScrollIndicator={true}
+                                            keyboardShouldPersistTaps="handled"
+                                        >
+                                            <View>
+                                                {/* Date Columns Header Row */}
+                                                <View style={{ flexDirection: "row" }}>
+                                                    {filteredSessions.map((session) => (
                                                         <View
                                                             key={session.id}
-                                                            style={attendancePagesStyle.statusCell}
+                                                            style={attendancePagesStyle.dateHeaderCell}
                                                         >
-                                                            <TextInput
-                                                                style={[
-                                                                    attendancePagesStyle.statusInput,
-                                                                    isPresent
-                                                                        ? attendancePagesStyle.statusInputPresent
-                                                                        : isAbsent
-                                                                        ? attendancePagesStyle.statusInputAbsent
-                                                                        : attendancePagesStyle.statusInputEmpty,
-                                                                ]}
-                                                                value={status}
-                                                                onChangeText={(val) =>
-                                                                    handleStatusInputChange(
-                                                                        session.id,
-                                                                        student.id,
-                                                                        val
-                                                                    )
-                                                                }
-                                                                onBlur={() =>
-                                                                    handleStatusBlur(
-                                                                        session.id,
-                                                                        student.id
-                                                                    )
-                                                                }
-                                                                keyboardType="number-pad"
-                                                                selectTextOnFocus={true}
-                                                                contextMenuHidden={true}
-                                                                autoCorrect={false}
-                                                                autoCapitalize="none"
-                                                                textAlign="center"
-                                                            />
+                                                            <View style={attendancePagesStyle.dateHeaderTopRow}>
+                                                                <Text style={attendancePagesStyle.dateHeaderText}>
+                                                                    {formatDateHeader(session.date)}
+                                                                </Text>
+                                                                <View style={attendancePagesStyle.headerActionIcons}>
+                                                                    <Pressable
+                                                                        onPress={() => handleOpenEditModal(session)}
+                                                                        style={({ pressed }) => [
+                                                                            attendancePagesStyle.actionIconBtn,
+                                                                            pressed && attendancePagesStyle.actionIconBtnPressed,
+                                                                        ]}
+                                                                        hitSlop={6}
+                                                                        accessibilityLabel="Edit attendance session"
+                                                                    >
+                                                                        <Ionicons name="pencil" size={11} color="#4F46E5" />
+                                                                    </Pressable>
+                                                                    <Pressable
+                                                                        onPress={() => setDeletingSession(session)}
+                                                                        style={({ pressed }) => [
+                                                                            attendancePagesStyle.actionIconBtn,
+                                                                            pressed && attendancePagesStyle.actionIconBtnPressed,
+                                                                        ]}
+                                                                        hitSlop={6}
+                                                                        accessibilityLabel="Delete attendance session"
+                                                                    >
+                                                                        <Ionicons name="trash-outline" size={11} color="#EF4444" />
+                                                                    </Pressable>
+                                                                </View>
+                                                            </View>
+                                                            <Text
+                                                                style={attendancePagesStyle.dateHeaderSubtext}
+                                                                numberOfLines={1}
+                                                            >
+                                                                {session.title ? session.title : session.date}
+                                                            </Text>
                                                         </View>
-                                                    );
-                                                })}
+                                                    ))}
+                                                </View>
+
+                                                {/* Attendance Status Cells per Student Row */}
+                                                {filteredStudents.map((student, rowIdx) => (
+                                                    <View
+                                                        key={student.id}
+                                                        style={[
+                                                            { flexDirection: "row" },
+                                                            rowIdx % 2 === 0
+                                                                ? attendancePagesStyle.rowEven
+                                                                : attendancePagesStyle.rowOdd,
+                                                        ]}
+                                                    >
+                                                        {filteredSessions.map((session) => {
+                                                            const key = `${student.id}_${session.id}`;
+                                                            const status = recordsMap[key] !== undefined ? recordsMap[key] : "";
+                                                            const isPresent = status === "1";
+                                                            const isAbsent = status === "0";
+
+                                                            return (
+                                                                <View
+                                                                    key={session.id}
+                                                                    style={attendancePagesStyle.statusCell}
+                                                                >
+                                                                    <TextInput
+                                                                        style={[
+                                                                            attendancePagesStyle.statusInput,
+                                                                            isPresent
+                                                                                ? attendancePagesStyle.statusInputPresent
+                                                                                : isAbsent
+                                                                                    ? attendancePagesStyle.statusInputAbsent
+                                                                                    : attendancePagesStyle.statusInputEmpty,
+                                                                        ]}
+                                                                        value={status}
+                                                                        onChangeText={(val) =>
+                                                                            handleStatusInputChange(
+                                                                                session.id,
+                                                                                student.id,
+                                                                                val
+                                                                            )
+                                                                        }
+                                                                        onBlur={() =>
+                                                                            handleStatusBlur(
+                                                                                session.id,
+                                                                                student.id
+                                                                            )
+                                                                        }
+                                                                        keyboardType="number-pad"
+                                                                        selectTextOnFocus={true}
+                                                                        contextMenuHidden={true}
+                                                                        autoCorrect={false}
+                                                                        autoCapitalize="none"
+                                                                        textAlign="center"
+                                                                    />
+                                                                </View>
+                                                            );
+                                                        })}
+                                                    </View>
+                                                ))}
                                             </View>
-                                        ))}
+                                        </ScrollView>
                                     </View>
-                                </ScrollView>
-                            </View>
+                                </View>
+                            )}
                         </View>
-                    )}
-                </View>
-                </>
+                    </>
                 )}
             </ScrollView>
 
@@ -1363,8 +1361,8 @@ export function AttendancePages() {
                                             ? "Updating..."
                                             : "Creating..."
                                         : editingSession
-                                        ? "Update Session"
-                                        : "Create Session"
+                                            ? "Update Session"
+                                            : "Create Session"
                                 }
                                 onPress={handleCreateSession}
                             />
@@ -1376,7 +1374,10 @@ export function AttendancePages() {
                                         setEditingSession(null);
                                     }
                                 }}
-                                style={attendancePagesStyle.cancelButton}
+                                style={({ pressed }) => [
+                                    attendancePagesStyle.cancelButton,
+                                    pressed && attendancePagesStyle.cancelButtonPressed,
+                                ]}
                             >
                                 <Text style={attendancePagesStyle.cancelButtonText}>Cancel</Text>
                             </Pressable>
@@ -1412,32 +1413,33 @@ export function AttendancePages() {
                             All student attendance records recorded for this session will be permanently deleted.
                         </Text>
 
-                        <View style={attendancePagesStyle.modalActionsRow}>
-                            <Pressable
-                                disabled={isDeletingSession}
-                                onPress={() => setDeletingSession(null)}
-                                style={attendancePagesStyle.cancelButton}
-                            >
-                                <Text style={attendancePagesStyle.cancelButtonText}>Cancel</Text>
-                            </Pressable>
+                        <Pressable
+                            disabled={isDeletingSession}
+                            onPress={handleConfirmDeleteSession}
+                            style={({ pressed }) => [
+                                attendancePagesStyle.dangerButton,
+                                pressed && attendancePagesStyle.dangerButtonPressed,
+                            ]}
+                        >
+                            {isDeletingSession ? (
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : (
+                                <Text style={attendancePagesStyle.dangerButtonText}>
+                                    Delete Session
+                                </Text>
+                            )}
+                        </Pressable>
 
-                            <Pressable
-                                disabled={isDeletingSession}
-                                onPress={handleConfirmDeleteSession}
-                                style={({ pressed }) => [
-                                    attendancePagesStyle.dangerButton,
-                                    pressed && attendancePagesStyle.dangerButtonPressed,
-                                ]}
-                            >
-                                {isDeletingSession ? (
-                                    <ActivityIndicator size="small" color="#FFFFFF" />
-                                ) : (
-                                    <Text style={attendancePagesStyle.dangerButtonText}>
-                                        Delete Session
-                                    </Text>
-                                )}
-                            </Pressable>
-                        </View>
+                        <Pressable
+                            disabled={isDeletingSession}
+                            onPress={() => setDeletingSession(null)}
+                            style={({ pressed }) => [
+                                attendancePagesStyle.cancelButton,
+                                pressed && attendancePagesStyle.cancelButtonPressed,
+                            ]}
+                        >
+                            <Text style={attendancePagesStyle.cancelButtonText}>Cancel</Text>
+                        </Pressable>
                     </View>
                 </View>
             </Modal>

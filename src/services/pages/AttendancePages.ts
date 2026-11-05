@@ -55,32 +55,12 @@ export async function createAttendanceSession(
 
         const sessionTitle = title?.trim() ? title.trim() : null;
 
-        let newSessionId: number = 0;
+        const insertResult = await db.runAsync(
+            "INSERT INTO attendance_sessions (date, title, teacherId, classId) VALUES (?, ?, ?, ?)",
+            [date.trim(), sessionTitle, teacher.id, classId]
+        );
 
-        await db.withTransactionAsync(async () => {
-            const insertResult = await db.runAsync(
-                "INSERT INTO attendance_sessions (date, title, teacherId, classId) VALUES (?, ?, ?, ?)",
-                [date.trim(), sessionTitle, teacher.id, classId]
-            );
-
-            newSessionId = insertResult.lastInsertRowId;
-
-            // Fetch only students enrolled in this specific class
-            const students = await db.getAllAsync<{ id: number }>(
-                `SELECT s.id FROM students s
-                 JOIN class_students cs ON cs.studentId = s.id
-                 WHERE cs.classId = ?`,
-                [classId]
-            );
-
-            // Pre-populate each student as "1" (present) by default
-            for (const student of students) {
-                await db.runAsync(
-                    "INSERT INTO attendance_records (sessionId, studentId, status) VALUES (?, ?, '1')",
-                    [newSessionId, student.id]
-                );
-            }
-        });
+        const newSessionId = insertResult.lastInsertRowId;
 
         return {
             success: true,
