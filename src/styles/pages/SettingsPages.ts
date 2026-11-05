@@ -451,5 +451,58 @@ export const styles = StyleSheet.create({
         fontWeight: "700",
         color: "#FFFFFF",
     },
+
+    // Academic Settings Styles
+    academicBadge: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        backgroundColor: "#EEF2FF",
+        paddingHorizontal: 12,
+        paddingVertical: 5,
+        borderRadius: 20,
+        marginTop: 8,
+        borderWidth: 1,
+        borderColor: "#C7D2FE",
+    },
+    academicBadgeText: {
+        fontSize: 12,
+        fontWeight: "600",
+        color: "#4F46E5",
+    },
+    pillSelectorRow: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        gap: 8,
+        marginTop: 6,
+    },
+    pillButton: {
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+        backgroundColor: "#F8FAFC",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    pillButtonActive: {
+        backgroundColor: "#4F46E5",
+        borderColor: "#4F46E5",
+        shadowColor: "#4F46E5",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    pillButtonText: {
+        fontSize: 13,
+        fontWeight: "600",
+        color: "#475569",
+    },
+    pillButtonTextActive: {
+        color: "#FFFFFF",
+        fontWeight: "700",
+    },
 });
 

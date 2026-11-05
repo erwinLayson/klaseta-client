@@ -21,7 +21,8 @@ export async function createAttendanceSession(
     username: string,
     date: string,
     title?: string,
-    classId?: number | null
+    classId?: number | null,
+    quarter?: string | null
 ): Promise<{ success: boolean; message: string; sessionId?: number }> {
     if (!date.trim()) {
         return { success: false, message: "Date is required." };
@@ -54,10 +55,11 @@ export async function createAttendanceSession(
         }
 
         const sessionTitle = title?.trim() ? title.trim() : null;
+        const sessionQuarter = quarter?.trim() ? quarter.trim() : "Q1";
 
         const insertResult = await db.runAsync(
-            "INSERT INTO attendance_sessions (date, title, teacherId, classId) VALUES (?, ?, ?, ?)",
-            [date.trim(), sessionTitle, teacher.id, classId]
+            "INSERT INTO attendance_sessions (date, title, teacherId, classId, quarter) VALUES (?, ?, ?, ?, ?)",
+            [date.trim(), sessionTitle, teacher.id, classId, sessionQuarter]
         );
 
         const newSessionId = insertResult.lastInsertRowId;
@@ -147,7 +149,8 @@ export async function getAttendanceSpreadsheet(
 export async function updateAttendanceSession(
     sessionId: number,
     date: string,
-    title?: string
+    title?: string,
+    quarter?: string
 ): Promise<{ success: boolean; message: string }> {
     if (!date?.trim()) {
         return { success: false, message: "Date is required." };
@@ -156,10 +159,11 @@ export async function updateAttendanceSession(
     try {
         const db = await getDatabase();
         const sessionTitle = title?.trim() ? title.trim() : null;
+        const sessionQuarter = quarter?.trim() ? quarter.trim() : "Q1";
 
         await db.runAsync(
-            "UPDATE attendance_sessions SET date = ?, title = ? WHERE id = ?",
-            [date.trim(), sessionTitle, sessionId]
+            "UPDATE attendance_sessions SET date = ?, title = ?, quarter = ? WHERE id = ?",
+            [date.trim(), sessionTitle, sessionQuarter, sessionId]
         );
 
         return { success: true, message: "Attendance session updated successfully." };

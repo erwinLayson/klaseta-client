@@ -17,6 +17,7 @@ export interface Assessment {
     title: string;
     maxScore: number;
     date: string; // YYYY-MM-DD
+    quarter?: string | null; // e.g. "Q1", "Q2", "Q3", "Q4"
     createdAt?: string;
 }
 
@@ -33,6 +34,7 @@ export interface CreateAssessmentInput {
     date: string;
     weightId?: number | null;
     classId?: number;
+    quarter?: string;
 }
 
 export interface UpdateAssessmentInput {
@@ -42,6 +44,7 @@ export interface UpdateAssessmentInput {
     date: string;
     weightId?: number | null;
     classId?: number;
+    quarter?: string;
 }
 
 export interface CreateGradingWeightInput {

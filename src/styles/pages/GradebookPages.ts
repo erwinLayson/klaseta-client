@@ -798,19 +798,34 @@ export const styles = StyleSheet.create({
         justifyContent: "center",
         alignItems: "center",
         paddingHorizontal: 20,
+        paddingVertical: 24,
     },
     modalContent: {
         width: "100%",
-        maxWidth: 420,
+        maxWidth: 440,
+        maxHeight: "88%",
         backgroundColor: "#FFFFFF",
         borderRadius: 24,
         paddingHorizontal: 22,
-        paddingVertical: 24,
+        paddingTop: 22,
+        paddingBottom: 16,
         shadowColor: "#0F172A",
         shadowOffset: { width: 0, height: 16 },
         shadowOpacity: 0.12,
         shadowRadius: 28,
         elevation: 8,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+    },
+    modalScrollView: {
+        flexGrow: 0,
+        flexShrink: 1,
+        width: "100%",
+    },
+    modalScrollContent: {
+        flexGrow: 1,
+        paddingBottom: 36,
     },
     modalHeader: {
         flexDirection: "row",
@@ -1323,6 +1338,103 @@ export const styles = StyleSheet.create({
     },
     kebabActionDivider: {
         height: 8,
+    },
+
+    // Quarter Filter & Badges
+    quarterFilterRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        marginTop: 10,
+        flexWrap: "wrap",
+    },
+    quarterFilterPill: {
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 20,
+        backgroundColor: "#F1F5F9",
+        borderWidth: 1,
+        borderColor: "#E2E8F0",
+    },
+    quarterFilterPillActive: {
+        backgroundColor: "#4F46E5",
+        borderColor: "#4F46E5",
+    },
+    quarterFilterPillText: {
+        fontSize: 12,
+        fontWeight: "600",
+        color: "#64748B",
+    },
+    quarterFilterPillTextActive: {
+        color: "#FFFFFF",
+        fontWeight: "700",
+    },
+    quarterHeaderBadge: {
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+        backgroundColor: "#EEF2FF",
+        borderWidth: 1,
+        borderColor: "#C7D2FE",
+        alignSelf: "center",
+        marginTop: 3,
+    },
+    quarterHeaderBadgeText: {
+        fontSize: 10,
+        fontWeight: "700",
+        color: "#4F46E5",
+    },
+    modalQuarterGroup: {
+        marginBottom: 18,
+        marginTop: 4,
+    },
+    modalQuarterLabel: {
+        fontSize: 13,
+        fontWeight: "600",
+        color: "#334155",
+        marginBottom: 8,
+    },
+    modalQuarterRow: {
+        flexDirection: "row",
+        gap: 10,
+        marginBottom: 8,
+    },
+    modalQuarterPill: {
+        flex: 1,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 14,
+        borderWidth: 1.5,
+        borderColor: "#E2E8F0",
+        backgroundColor: "#F8FAFC",
+        justifyContent: "center",
+    },
+    modalQuarterPillActive: {
+        backgroundColor: "#EEF2FF",
+        borderColor: "#4F46E5",
+    },
+    modalQuarterPillHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+    },
+    modalQuarterPillCode: {
+        fontSize: 14,
+        fontWeight: "700",
+        color: "#334155",
+    },
+    modalQuarterPillCodeActive: {
+        color: "#4F46E5",
+    },
+    modalQuarterPillLabel: {
+        fontSize: 11,
+        fontWeight: "500",
+        color: "#64748B",
+        marginTop: 2,
+    },
+    modalQuarterPillLabelActive: {
+        color: "#4338CA",
+        fontWeight: "600",
     },
 });
 

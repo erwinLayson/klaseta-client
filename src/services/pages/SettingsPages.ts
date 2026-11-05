@@ -35,6 +35,25 @@ export interface UpdatePasswordResult {
     message: string;
 }
 
+export interface AcademicSettings {
+    id: number;
+    teacherId: number;
+    academicYear: string;
+    activeQuarter: string;
+    semester: string;
+    passingScore: number;
+    quarterCount: number; // 3 or 4
+    updatedAt?: string;
+}
+
+export interface UpdateAcademicSettingsInput {
+    academicYear: string;
+    activeQuarter: string;
+    semester: string;
+    passingScore?: number;
+    quarterCount?: number; // 3 or 4
+}
+
 export async function getUserProfile(username: string): Promise<UserProfileInfo | null> {
     try {
         const db = await getDatabase();
@@ -156,6 +175,12 @@ export async function deleteUserAccount(
             // 8. Delete all classes
             await db.runAsync(
                 "DELETE FROM classes WHERE teacherId = ?",
+                [teacherId]
+            );
+
+            // 8.5 Delete academic settings
+            await db.runAsync(
+                "DELETE FROM academic_settings WHERE teacherId = ?",
                 [teacherId]
             );
 
@@ -336,5 +361,115 @@ export async function updateUserPassword(
         };
     }
 }
+
+export async function getAcademicSettings(
+    username: string
+): Promise<AcademicSettings | null> {
+    try {
+        const db = await getDatabase();
+        const teacher = await db.getFirstAsync<{ id: number }>(
+            "SELECT id FROM users WHERE username = ?",
+            [username.trim()]
+        );
+        if (!teacher) return null;
+
+        let settings = await db.getFirstAsync<AcademicSettings>(
+            "SELECT * FROM academic_settings WHERE teacherId = ?",
+            [teacher.id]
+        );
+
+        if (!settings) {
+            await db.runAsync(
+                `INSERT OR IGNORE INTO academic_settings (teacherId, academicYear, activeQuarter, semester, passingScore, quarterCount)
+                 VALUES (?, '2024-2025', 'Q1', '1st Semester', 75.0, 4)`,
+                [teacher.id]
+            );
+            settings = await db.getFirstAsync<AcademicSettings>(
+                "SELECT * FROM academic_settings WHERE teacherId = ?",
+                [teacher.id]
+            );
+        }
+
+        return settings
+            ? {
+                  ...settings,
+                  quarterCount: settings.quarterCount === 3 ? 3 : 4,
+              }
+            : {
+                  id: 0,
+                  teacherId: teacher.id,
+                  academicYear: "2024-2025",
+                  activeQuarter: "Q1",
+                  semester: "1st Semester",
+                  passingScore: 75.0,
+                  quarterCount: 4,
+              };
+    } catch (error) {
+        console.error("Error fetching academic settings:", error);
+        return null;
+    }
+}
+
+export async function updateAcademicSettings(
+    username: string,
+    input: UpdateAcademicSettingsInput
+): Promise<{ success: boolean; message: string; settings?: AcademicSettings }> {
+    const academicYear = input.academicYear?.trim() || "2024-2025";
+    const quarterCount = input.quarterCount === 3 ? 3 : 4;
+    let activeQuarter = input.activeQuarter?.trim() || "Q1";
+    // If 3 quarters selected, activeQuarter cannot be Q4
+    if (quarterCount === 3 && activeQuarter === "Q4") {
+        activeQuarter = "Q3";
+    }
+    const semester = input.semester?.trim() || "1st Semester";
+    const passingScore = input.passingScore ?? 75.0;
+
+    if (!academicYear) {
+        return { success: false, message: "Academic Year is required." };
+    }
+
+    try {
+        const db = await getDatabase();
+        const teacher = await db.getFirstAsync<{ id: number }>(
+            "SELECT id FROM users WHERE username = ?",
+            [username.trim()]
+        );
+
+        if (!teacher) {
+            return { success: false, message: "User account not found." };
+        }
+
+        await db.runAsync(
+            `INSERT INTO academic_settings (teacherId, academicYear, activeQuarter, semester, passingScore, quarterCount, updatedAt)
+             VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+             ON CONFLICT(teacherId) DO UPDATE SET
+                 academicYear = excluded.academicYear,
+                 activeQuarter = excluded.activeQuarter,
+                 semester = excluded.semester,
+                 passingScore = excluded.passingScore,
+                 quarterCount = excluded.quarterCount,
+                 updatedAt = CURRENT_TIMESTAMP`,
+            [teacher.id, academicYear, activeQuarter, semester, passingScore, quarterCount]
+        );
+
+        const updated = await db.getFirstAsync<AcademicSettings>(
+            "SELECT * FROM academic_settings WHERE teacherId = ?",
+            [teacher.id]
+        );
+
+        return {
+            success: true,
+            message: "Academic settings updated successfully!",
+            settings: updated ? { ...updated, quarterCount } : undefined,
+        };
+    } catch (error) {
+        console.error("Error updating academic settings:", error);
+        return {
+            success: false,
+            message: "Failed to update academic settings.",
+        };
+    }
+}
+
 
 

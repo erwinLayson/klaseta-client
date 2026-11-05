@@ -34,6 +34,7 @@ import {
     deleteGradingWeight,
     saveAllAssessmentScores,
 } from "../services/pages/GradebookPages";
+import { getAcademicSettings } from "../services/pages/SettingsPages";
 import {
     BottomNavBar,
     Button,
@@ -89,6 +90,10 @@ export function GradebookPages() {
     const [nameQuery, setNameQuery] = useState("");
     const [selectedDate, setSelectedDate] = useState<string>("");
     const [isDateSelectModalOpen, setIsDateSelectModalOpen] = useState(false);
+    const [teacherActiveQuarter, setTeacherActiveQuarter] = useState("Q1");
+    const [selectedQuarterFilter, setSelectedQuarterFilter] = useState("ALL");
+    const [assessmentQuarter, setAssessmentQuarter] = useState("Q1");
+    const [quarterCount, setQuarterCount] = useState<number>(4);
 
     // Saving state
     const [isSaving, setIsSaving] = useState(false);
@@ -176,15 +181,31 @@ export function GradebookPages() {
         const initClasses = async () => {
             setIsLoadingClasses(true);
             try {
-                const list = await getClassesByTeacher(username);
+                const [list, academic] = await Promise.all([
+                    getClassesByTeacher(username),
+                    getAcademicSettings(username),
+                ]);
                 if (!isMounted) return;
                 setClasses(list);
+
+                if (academic?.activeQuarter) {
+                    setTeacherActiveQuarter(academic.activeQuarter);
+                    setAssessmentQuarter(academic.activeQuarter);
+                }
+                if (academic?.quarterCount) {
+                    const qc = academic.quarterCount === 3 ? 3 : 4;
+                    setQuarterCount(qc);
+                    if (qc === 3) {
+                        setSelectedQuarterFilter((prev) => (prev === "Q4" ? "ALL" : prev));
+                    }
+                }
 
                 if (routeClassId) {
                     setSelectedClassId(routeClassId);
                 }
             } finally {
-                if (isMounted) setIsLoadingClasses(false);
+                if (!isMounted) return;
+                setIsLoadingClasses(false);
             }
         };
         initClasses();
@@ -264,13 +285,18 @@ export function GradebookPages() {
         return dates;
     }, [assessments]);
 
-    // Filter assessments by specific selected date
+    // Filter assessments by specific selected date and quarter
     const filteredAssessments = useMemo(() => {
-        if (!selectedDate) {
-            return assessments;
-        }
-        return assessments.filter((a) => a.date === selectedDate);
-    }, [assessments, selectedDate]);
+        return assessments.filter((a) => {
+            if (selectedQuarterFilter !== "ALL" && (a.quarter || "Q1") !== selectedQuarterFilter) {
+                return false;
+            }
+            if (selectedDate && a.date !== selectedDate) {
+                return false;
+            }
+            return true;
+        });
+    }, [assessments, selectedQuarterFilter, selectedDate]);
 
     // Total weights percentage
     const totalWeightPercent = useMemo(() => {
@@ -283,21 +309,24 @@ export function GradebookPages() {
         for (const student of students) {
             map[student.id] = calculateStudentGrade(
                 student.id,
-                assessments,
+                filteredAssessments,
                 weights,
                 scoresMap,
                 attendanceMap[student.id]
             );
         }
         return map;
-    }, [students, assessments, weights, scoresMap, attendanceMap]);
+    }, [students, filteredAssessments, weights, scoresMap, attendanceMap]);
 
     // Gradebook Stats
     const stats = useMemo(() => {
-        const totalAssessments = assessments.length;
+        const totalAssessments = filteredAssessments.length;
         let gradedCount = 0;
-        for (const val of Object.values(scoresMap)) {
-            if (val.trim() !== "") gradedCount++;
+        for (const a of filteredAssessments) {
+            for (const s of students) {
+                const val = scoresMap[`${s.id}_${a.id}`];
+                if (val && val.trim() !== "") gradedCount++;
+            }
         }
 
         const gradedStudents = Object.values(studentGradesMap).filter((g) => g.numericGrade !== null);
@@ -315,7 +344,7 @@ export function GradebookPages() {
             passingCount: passingStudents.length,
             totalGradedStudents: gradedStudents.length,
         };
-    }, [assessments, scoresMap, studentGradesMap]);
+    }, [filteredAssessments, students, scoresMap, studentGradesMap]);
 
     // Options for SelectGroup when creating/editing assessment
     const weightSelectOptions = useMemo<SelectOption[]>(() => {
@@ -341,6 +370,8 @@ export function GradebookPages() {
         setAssessmentTitle("");
         setAssessmentMaxScore("50");
         setAssessmentDate(getTodayDateString());
+        const defaultQ = quarterCount === 3 && teacherActiveQuarter === "Q4" ? "Q1" : (teacherActiveQuarter || "Q1");
+        setAssessmentQuarter(defaultQ);
         const nonAttendanceWeights = weights.filter(
             (w) => !w.name.trim().toLowerCase().includes("attendance")
         );
@@ -356,6 +387,8 @@ export function GradebookPages() {
         setAssessmentTitle(assessment.title);
         setAssessmentMaxScore(String(assessment.maxScore));
         setAssessmentDate(assessment.date);
+        const fallbackQ = quarterCount === 3 && assessment.quarter === "Q4" ? "Q1" : (assessment.quarter || teacherActiveQuarter || "Q1");
+        setAssessmentQuarter(fallbackQ);
         setAssessmentWeightId(assessment.weightId ? String(assessment.weightId) : "NONE");
         setIsAssessmentModalOpen(true);
     };
@@ -406,6 +439,7 @@ export function GradebookPages() {
                     maxScore: maxScoreNum,
                     date: assessmentDate.trim(),
                     weightId,
+                    quarter: assessmentQuarter,
                 });
 
                 if (result.success) {
@@ -432,6 +466,7 @@ export function GradebookPages() {
                     date: assessmentDate.trim(),
                     weightId,
                     classId: selectedClassId ?? undefined,
+                    quarter: assessmentQuarter,
                 });
 
                 if (result.success) {
@@ -441,7 +476,7 @@ export function GradebookPages() {
                         visible: true,
                         type: "success",
                         title: "Assessment Created",
-                        message: `"${assessmentTitle.trim()}" (Max Score: ${maxScoreNum}) has been added to the gradebook.`,
+                        message: `"${assessmentTitle.trim()}" (Max Score: ${maxScoreNum}, ${assessmentQuarter}) has been added to the gradebook.`,
                     });
                 } else {
                     setDialog({
@@ -1071,6 +1106,42 @@ export function GradebookPages() {
                         </Pressable>
                     </View>
 
+                    {/* Quarter Filter Pills */}
+                    <View style={gradebookPagesStyle.quarterFilterRow}>
+                        <Ionicons name="calendar-outline" size={14} color="#4F46E5" />
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#334155", marginRight: 4 }}>
+                            Quarter:
+                        </Text>
+                        {[
+                            { id: "ALL", label: "All Quarters" },
+                            { id: "Q1", label: "Q1" },
+                            { id: "Q2", label: "Q2" },
+                            { id: "Q3", label: "Q3" },
+                            ...(quarterCount === 4 ? [{ id: "Q4", label: "Q4" }] : []),
+                        ].map((q) => {
+                            const isActive = selectedQuarterFilter === q.id;
+                            return (
+                                <Pressable
+                                    key={q.id}
+                                    style={[
+                                        gradebookPagesStyle.quarterFilterPill,
+                                        isActive && gradebookPagesStyle.quarterFilterPillActive,
+                                    ]}
+                                    onPress={() => setSelectedQuarterFilter(q.id)}
+                                >
+                                    <Text
+                                        style={[
+                                            gradebookPagesStyle.quarterFilterPillText,
+                                            isActive && gradebookPagesStyle.quarterFilterPillTextActive,
+                                        ]}
+                                    >
+                                        {q.label}
+                                    </Text>
+                                </Pressable>
+                            );
+                        })}
+                    </View>
+
                     {/* Spreadsheet Table View */}
                     {students.length === 0 ? (
                         <View style={gradebookPagesStyle.emptyCard}>
@@ -1354,8 +1425,14 @@ export function GradebookPages() {
                                                             </View>
                                                         </View>
 
-                                                        {/* Badges: Category & Max Score */}
+                                                        {/* Badges: Category & Max Score & Quarter */}
                                                         <View style={gradebookPagesStyle.assessmentMetaRow}>
+                                                            <View style={gradebookPagesStyle.quarterHeaderBadge}>
+                                                                <Text style={gradebookPagesStyle.quarterHeaderBadgeText}>
+                                                                    {assessment.quarter || "Q1"}
+                                                                </Text>
+                                                            </View>
+
                                                             {assessment.weightName ? (
                                                                 <View style={gradebookPagesStyle.weightBadge}>
                                                                     <Text style={gradebookPagesStyle.weightBadgeText}>
@@ -1523,7 +1600,13 @@ export function GradebookPages() {
                             </Pressable>
                         </View>
 
-                        <ScrollView showsVerticalScrollIndicator={false}>
+                        <ScrollView
+                            style={gradebookPagesStyle.modalScrollView}
+                            contentContainerStyle={gradebookPagesStyle.modalScrollContent}
+                            keyboardShouldPersistTaps="handled"
+                            showsVerticalScrollIndicator={true}
+                            nestedScrollEnabled={true}
+                        >
                             <InputGroup
                                 label="Assessment Title"
                                 placeholder="e.g. Quiz 1: Fractions, Midterm Exam"
@@ -1563,6 +1646,143 @@ export function GradebookPages() {
                                 onSelect={(val) => setAssessmentWeightId(val)}
                                 placeholder="Select category"
                             />
+
+                            {/* Quarter Selection */}
+                            <View style={gradebookPagesStyle.modalQuarterGroup}>
+                                <Text style={gradebookPagesStyle.modalQuarterLabel}>
+                                    Academic Quarter <Text style={{ color: "#DC2626" }}>*</Text>
+                                </Text>
+
+                                {/* Row 1: Q1 & Q2 */}
+                                <View style={gradebookPagesStyle.modalQuarterRow}>
+                                    <Pressable
+                                        style={[
+                                            gradebookPagesStyle.modalQuarterPill,
+                                            assessmentQuarter === "Q1" && gradebookPagesStyle.modalQuarterPillActive,
+                                        ]}
+                                        onPress={() => setAssessmentQuarter("Q1")}
+                                    >
+                                        <View style={gradebookPagesStyle.modalQuarterPillHeader}>
+                                            <Text
+                                                style={[
+                                                    gradebookPagesStyle.modalQuarterPillCode,
+                                                    assessmentQuarter === "Q1" && gradebookPagesStyle.modalQuarterPillCodeActive,
+                                                ]}
+                                            >
+                                                Q1
+                                            </Text>
+                                            {assessmentQuarter === "Q1" && (
+                                                <Ionicons name="checkmark-circle" size={16} color="#4F46E5" />
+                                            )}
+                                        </View>
+                                        <Text
+                                            style={[
+                                                gradebookPagesStyle.modalQuarterPillLabel,
+                                                assessmentQuarter === "Q1" && gradebookPagesStyle.modalQuarterPillLabelActive,
+                                            ]}
+                                        >
+                                            1st Quarter
+                                        </Text>
+                                    </Pressable>
+
+                                    <Pressable
+                                        style={[
+                                            gradebookPagesStyle.modalQuarterPill,
+                                            assessmentQuarter === "Q2" && gradebookPagesStyle.modalQuarterPillActive,
+                                        ]}
+                                        onPress={() => setAssessmentQuarter("Q2")}
+                                    >
+                                        <View style={gradebookPagesStyle.modalQuarterPillHeader}>
+                                            <Text
+                                                style={[
+                                                    gradebookPagesStyle.modalQuarterPillCode,
+                                                    assessmentQuarter === "Q2" && gradebookPagesStyle.modalQuarterPillCodeActive,
+                                                ]}
+                                            >
+                                                Q2
+                                            </Text>
+                                            {assessmentQuarter === "Q2" && (
+                                                <Ionicons name="checkmark-circle" size={16} color="#4F46E5" />
+                                            )}
+                                        </View>
+                                        <Text
+                                            style={[
+                                                gradebookPagesStyle.modalQuarterPillLabel,
+                                                assessmentQuarter === "Q2" && gradebookPagesStyle.modalQuarterPillLabelActive,
+                                            ]}
+                                        >
+                                            2nd Quarter
+                                        </Text>
+                                    </Pressable>
+                                </View>
+
+                                {/* Row 2: Q3 & (if quarterCount === 4) Q4 */}
+                                <View style={gradebookPagesStyle.modalQuarterRow}>
+                                    <Pressable
+                                        style={[
+                                            gradebookPagesStyle.modalQuarterPill,
+                                            assessmentQuarter === "Q3" && gradebookPagesStyle.modalQuarterPillActive,
+                                        ]}
+                                        onPress={() => setAssessmentQuarter("Q3")}
+                                    >
+                                        <View style={gradebookPagesStyle.modalQuarterPillHeader}>
+                                            <Text
+                                                style={[
+                                                    gradebookPagesStyle.modalQuarterPillCode,
+                                                    assessmentQuarter === "Q3" && gradebookPagesStyle.modalQuarterPillCodeActive,
+                                                ]}
+                                            >
+                                                Q3
+                                            </Text>
+                                            {assessmentQuarter === "Q3" && (
+                                                <Ionicons name="checkmark-circle" size={16} color="#4F46E5" />
+                                            )}
+                                        </View>
+                                        <Text
+                                            style={[
+                                                gradebookPagesStyle.modalQuarterPillLabel,
+                                                assessmentQuarter === "Q3" && gradebookPagesStyle.modalQuarterPillLabelActive,
+                                            ]}
+                                        >
+                                            3rd Quarter
+                                        </Text>
+                                    </Pressable>
+
+                                    {quarterCount === 4 ? (
+                                        <Pressable
+                                            style={[
+                                                gradebookPagesStyle.modalQuarterPill,
+                                                assessmentQuarter === "Q4" && gradebookPagesStyle.modalQuarterPillActive,
+                                            ]}
+                                            onPress={() => setAssessmentQuarter("Q4")}
+                                        >
+                                            <View style={gradebookPagesStyle.modalQuarterPillHeader}>
+                                                <Text
+                                                    style={[
+                                                        gradebookPagesStyle.modalQuarterPillCode,
+                                                        assessmentQuarter === "Q4" && gradebookPagesStyle.modalQuarterPillCodeActive,
+                                                    ]}
+                                                >
+                                                    Q4
+                                                </Text>
+                                                {assessmentQuarter === "Q4" && (
+                                                    <Ionicons name="checkmark-circle" size={16} color="#4F46E5" />
+                                                )}
+                                            </View>
+                                            <Text
+                                                style={[
+                                                    gradebookPagesStyle.modalQuarterPillLabel,
+                                                    assessmentQuarter === "Q4" && gradebookPagesStyle.modalQuarterPillLabelActive,
+                                                ]}
+                                            >
+                                                4th Quarter
+                                            </Text>
+                                        </Pressable>
+                                    ) : (
+                                        <View style={{ flex: 1 }} />
+                                    )}
+                                </View>
+                            </View>
 
                             <Button
                                 label={

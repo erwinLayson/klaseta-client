@@ -149,9 +149,11 @@ export async function createAssessment(
             return { success: false, message: "Teacher account not found." };
         }
 
+        const quarter = input.quarter?.trim() || "Q1";
+
         const result = await db.runAsync(
-            `INSERT INTO assessments (teacherId, weightId, title, maxScore, date, classId)
-             VALUES (?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO assessments (teacherId, weightId, title, maxScore, date, classId, quarter)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
             [
                 teacher.id,
                 input.weightId ?? null,
@@ -159,6 +161,7 @@ export async function createAssessment(
                 input.maxScore,
                 input.date.trim(),
                 input.classId ?? null,
+                quarter,
             ]
         );
 
@@ -188,15 +191,17 @@ export async function updateAssessment(
 
     try {
         const db = await getDatabase();
+        const quarter = input.quarter?.trim() || "Q1";
         await db.runAsync(
             `UPDATE assessments
-             SET title = ?, maxScore = ?, date = ?, weightId = ?
+             SET title = ?, maxScore = ?, date = ?, weightId = ?, quarter = ?
              WHERE id = ?`,
             [
                 input.title.trim(),
                 input.maxScore,
                 input.date.trim(),
                 input.weightId ?? null,
+                quarter,
                 input.id,
             ]
         );
@@ -298,6 +303,7 @@ export async function getGradebookSpreadsheet(
             title: row.title,
             maxScore: row.maxScore,
             date: row.date,
+            quarter: (row as { quarter?: string | null }).quarter ?? "Q1",
             createdAt: row.createdAt,
         }));
 

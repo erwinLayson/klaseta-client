@@ -27,6 +27,7 @@ import {
     getAttendanceSpreadsheet,
     saveAllAttendanceRecords,
 } from "../services/pages/AttendancePages";
+import { getAcademicSettings } from "../services/pages/SettingsPages";
 import {
     BottomNavBar,
     Button,
@@ -95,6 +96,12 @@ export function AttendancePages() {
     const [selectedDate, setSelectedDate] = useState<string>("");
     const [isDateSelectModalOpen, setIsDateSelectModalOpen] = useState(false);
 
+    // Quarter state
+    const [teacherActiveQuarter, setTeacherActiveQuarter] = useState("Q1");
+    const [selectedQuarterFilter, setSelectedQuarterFilter] = useState("ALL");
+    const [sessionQuarter, setSessionQuarter] = useState("Q1");
+    const [quarterCount, setQuarterCount] = useState<number>(4);
+
     const [isSaving, setIsSaving] = useState(false);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
@@ -133,15 +140,31 @@ export function AttendancePages() {
         const initClasses = async () => {
             setIsLoadingClasses(true);
             try {
-                const list = await getClassesByTeacher(username);
+                const [list, academic] = await Promise.all([
+                    getClassesByTeacher(username),
+                    getAcademicSettings(username),
+                ]);
                 if (!isMounted) return;
                 setClasses(list);
+
+                if (academic?.activeQuarter) {
+                    setTeacherActiveQuarter(academic.activeQuarter);
+                    setSessionQuarter(academic.activeQuarter);
+                }
+                if (academic?.quarterCount) {
+                    const qc = academic.quarterCount === 3 ? 3 : 4;
+                    setQuarterCount(qc);
+                    if (qc === 3) {
+                        setSelectedQuarterFilter((prev) => (prev === "Q4" ? "ALL" : prev));
+                    }
+                }
 
                 if (routeClassId) {
                     setSelectedClassId(routeClassId);
                 }
             } finally {
-                if (isMounted) setIsLoadingClasses(false);
+                if (!isMounted) return;
+                setIsLoadingClasses(false);
             }
         };
         initClasses();
@@ -220,18 +243,25 @@ export function AttendancePages() {
         return dates;
     }, [sessions]);
 
-    // Filter attendance sessions by specific selected date
+    // Filter attendance sessions by specific selected date and quarter
     const filteredSessions = useMemo(() => {
-        if (!selectedDate) {
-            return sessions;
-        }
-        return sessions.filter((s) => s.date === selectedDate);
-    }, [sessions, selectedDate]);
+        return sessions.filter((s) => {
+            if (selectedQuarterFilter !== "ALL" && (s.quarter || "Q1") !== selectedQuarterFilter) {
+                return false;
+            }
+            if (selectedDate && s.date !== selectedDate) {
+                return false;
+            }
+            return true;
+        });
+    }, [sessions, selectedQuarterFilter, selectedDate]);
 
     const handleOpenCreateModal = () => {
         setEditingSession(null);
         setSessionDate(getTodayDateString());
         setSessionTitle("");
+        const defaultQ = quarterCount === 3 && teacherActiveQuarter === "Q4" ? "Q1" : (teacherActiveQuarter || "Q1");
+        setSessionQuarter(defaultQ);
         setIsCreateModalOpen(true);
     };
 
@@ -239,6 +269,8 @@ export function AttendancePages() {
         setEditingSession(session);
         setSessionDate(session.date);
         setSessionTitle(session.title || "");
+        const fallbackQ = quarterCount === 3 && session.quarter === "Q4" ? "Q1" : (session.quarter || teacherActiveQuarter || "Q1");
+        setSessionQuarter(fallbackQ);
         setIsCreateModalOpen(true);
     };
 
@@ -271,7 +303,8 @@ export function AttendancePages() {
                 const result = await updateAttendanceSession(
                     editingSession.id,
                     sessionDate.trim(),
-                    sessionTitle.trim() || undefined
+                    sessionTitle.trim() || undefined,
+                    sessionQuarter
                 );
 
                 if (result.success) {
@@ -297,7 +330,8 @@ export function AttendancePages() {
                     username,
                     sessionDate.trim(),
                     sessionTitle.trim() || undefined,
-                    selectedClassId
+                    selectedClassId,
+                    sessionQuarter
                 );
 
                 if (result.success) {
@@ -307,7 +341,7 @@ export function AttendancePages() {
                         visible: true,
                         type: "success",
                         title: "Session Created",
-                        message: `Daily attendance session for ${sessionDate} has been created.`,
+                        message: `Daily attendance session for ${sessionDate} (${sessionQuarter}) has been created.`,
                     });
                 } else {
                     setDialog({
@@ -862,6 +896,42 @@ export function AttendancePages() {
                                 </Pressable>
                             </View>
 
+                            {/* Quarter Filter Pills */}
+                            <View style={attendancePagesStyle.quarterFilterRow}>
+                                <Ionicons name="calendar-outline" size={14} color="#059669" />
+                                <Text style={{ fontSize: 12, fontWeight: "700", color: "#334155", marginRight: 4 }}>
+                                    Quarter:
+                                </Text>
+                                {[
+                                    { id: "ALL", label: "All Quarters" },
+                                    { id: "Q1", label: "Q1" },
+                                    { id: "Q2", label: "Q2" },
+                                    { id: "Q3", label: "Q3" },
+                                    ...(quarterCount === 4 ? [{ id: "Q4", label: "Q4" }] : []),
+                                ].map((q) => {
+                                    const isActive = selectedQuarterFilter === q.id;
+                                    return (
+                                        <Pressable
+                                            key={q.id}
+                                            style={[
+                                                attendancePagesStyle.quarterFilterPill,
+                                                isActive && attendancePagesStyle.quarterFilterPillActive,
+                                            ]}
+                                            onPress={() => setSelectedQuarterFilter(q.id)}
+                                        >
+                                            <Text
+                                                style={[
+                                                    attendancePagesStyle.quarterFilterPillText,
+                                                    isActive && attendancePagesStyle.quarterFilterPillTextActive,
+                                                ]}
+                                            >
+                                                {q.label}
+                                            </Text>
+                                        </Pressable>
+                                    );
+                                })}
+                            </View>
+
                             {/* Status Legend (1 for Present, 0 for Absent) */}
                             <View style={attendancePagesStyle.legendRow}>
                                 <View style={attendancePagesStyle.legendItems}>
@@ -1075,6 +1145,11 @@ export function AttendancePages() {
                                                             >
                                                                 {session.title ? session.title : session.date}
                                                             </Text>
+                                                            <View style={attendancePagesStyle.quarterHeaderBadge}>
+                                                                <Text style={attendancePagesStyle.quarterHeaderBadgeText}>
+                                                                    {session.quarter || "Q1"}
+                                                                </Text>
+                                                            </View>
                                                         </View>
                                                     ))}
                                                 </View>
@@ -1199,7 +1274,13 @@ export function AttendancePages() {
                             </Pressable>
                         </View>
 
-                        <ScrollView showsVerticalScrollIndicator={false}>
+                        <ScrollView
+                            style={attendancePagesStyle.modalScrollView}
+                            contentContainerStyle={attendancePagesStyle.modalScrollContent}
+                            keyboardShouldPersistTaps="handled"
+                            showsVerticalScrollIndicator={true}
+                            nestedScrollEnabled={true}
+                        >
                             {/* Quick Date Chips */}
                             <View style={attendancePagesStyle.dateQuickChipsRow}>
                                 <Pressable
@@ -1223,6 +1304,143 @@ export function AttendancePages() {
                                 value={sessionTitle}
                                 onChangeText={setSessionTitle}
                             />
+
+                            {/* Quarter Selection */}
+                            <View style={attendancePagesStyle.modalQuarterGroup}>
+                                <Text style={attendancePagesStyle.modalQuarterLabel}>
+                                    Academic Quarter <Text style={{ color: "#DC2626" }}>*</Text>
+                                </Text>
+
+                                {/* Row 1: Q1 & Q2 */}
+                                <View style={attendancePagesStyle.modalQuarterRow}>
+                                    <Pressable
+                                        style={[
+                                            attendancePagesStyle.modalQuarterPill,
+                                            sessionQuarter === "Q1" && attendancePagesStyle.modalQuarterPillActive,
+                                        ]}
+                                        onPress={() => setSessionQuarter("Q1")}
+                                    >
+                                        <View style={attendancePagesStyle.modalQuarterPillHeader}>
+                                            <Text
+                                                style={[
+                                                    attendancePagesStyle.modalQuarterPillCode,
+                                                    sessionQuarter === "Q1" && attendancePagesStyle.modalQuarterPillCodeActive,
+                                                ]}
+                                            >
+                                                Q1
+                                            </Text>
+                                            {sessionQuarter === "Q1" && (
+                                                <Ionicons name="checkmark-circle" size={16} color="#059669" />
+                                            )}
+                                        </View>
+                                        <Text
+                                            style={[
+                                                attendancePagesStyle.modalQuarterPillLabel,
+                                                sessionQuarter === "Q1" && attendancePagesStyle.modalQuarterPillLabelActive,
+                                            ]}
+                                        >
+                                            1st Quarter
+                                        </Text>
+                                    </Pressable>
+
+                                    <Pressable
+                                        style={[
+                                            attendancePagesStyle.modalQuarterPill,
+                                            sessionQuarter === "Q2" && attendancePagesStyle.modalQuarterPillActive,
+                                        ]}
+                                        onPress={() => setSessionQuarter("Q2")}
+                                    >
+                                        <View style={attendancePagesStyle.modalQuarterPillHeader}>
+                                            <Text
+                                                style={[
+                                                    attendancePagesStyle.modalQuarterPillCode,
+                                                    sessionQuarter === "Q2" && attendancePagesStyle.modalQuarterPillCodeActive,
+                                                ]}
+                                            >
+                                                Q2
+                                            </Text>
+                                            {sessionQuarter === "Q2" && (
+                                                <Ionicons name="checkmark-circle" size={16} color="#059669" />
+                                            )}
+                                        </View>
+                                        <Text
+                                            style={[
+                                                attendancePagesStyle.modalQuarterPillLabel,
+                                                sessionQuarter === "Q2" && attendancePagesStyle.modalQuarterPillLabelActive,
+                                            ]}
+                                        >
+                                            2nd Quarter
+                                        </Text>
+                                    </Pressable>
+                                </View>
+
+                                {/* Row 2: Q3 & (if quarterCount === 4) Q4 */}
+                                <View style={attendancePagesStyle.modalQuarterRow}>
+                                    <Pressable
+                                        style={[
+                                            attendancePagesStyle.modalQuarterPill,
+                                            sessionQuarter === "Q3" && attendancePagesStyle.modalQuarterPillActive,
+                                        ]}
+                                        onPress={() => setSessionQuarter("Q3")}
+                                    >
+                                        <View style={attendancePagesStyle.modalQuarterPillHeader}>
+                                            <Text
+                                                style={[
+                                                    attendancePagesStyle.modalQuarterPillCode,
+                                                    sessionQuarter === "Q3" && attendancePagesStyle.modalQuarterPillCodeActive,
+                                                ]}
+                                            >
+                                                Q3
+                                            </Text>
+                                            {sessionQuarter === "Q3" && (
+                                                <Ionicons name="checkmark-circle" size={16} color="#059669" />
+                                            )}
+                                        </View>
+                                        <Text
+                                            style={[
+                                                attendancePagesStyle.modalQuarterPillLabel,
+                                                sessionQuarter === "Q3" && attendancePagesStyle.modalQuarterPillLabelActive,
+                                            ]}
+                                        >
+                                            3rd Quarter
+                                        </Text>
+                                    </Pressable>
+
+                                    {quarterCount === 4 ? (
+                                        <Pressable
+                                            style={[
+                                                attendancePagesStyle.modalQuarterPill,
+                                                sessionQuarter === "Q4" && attendancePagesStyle.modalQuarterPillActive,
+                                            ]}
+                                            onPress={() => setSessionQuarter("Q4")}
+                                        >
+                                            <View style={attendancePagesStyle.modalQuarterPillHeader}>
+                                                <Text
+                                                    style={[
+                                                        attendancePagesStyle.modalQuarterPillCode,
+                                                        sessionQuarter === "Q4" && attendancePagesStyle.modalQuarterPillCodeActive,
+                                                    ]}
+                                                >
+                                                    Q4
+                                                </Text>
+                                                {sessionQuarter === "Q4" && (
+                                                    <Ionicons name="checkmark-circle" size={16} color="#059669" />
+                                                )}
+                                            </View>
+                                            <Text
+                                                style={[
+                                                    attendancePagesStyle.modalQuarterPillLabel,
+                                                    sessionQuarter === "Q4" && attendancePagesStyle.modalQuarterPillLabelActive,
+                                                ]}
+                                            >
+                                                4th Quarter
+                                            </Text>
+                                        </Pressable>
+                                    ) : (
+                                        <View style={{ flex: 1 }} />
+                                    )}
+                                </View>
+                            </View>
 
                             <Button
                                 label={
