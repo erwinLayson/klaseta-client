@@ -29,7 +29,8 @@ import {
     addStudentToClass,
     addStudentsBulkToClass,
     removeStudentFromClass,
-    parseXlsxFile,
+    parseAndValidateXlsx,
+    type XlsxValidationResult,
 } from "../services/pages/MyClassPages";
 import {
     BottomNavBar,
@@ -107,12 +108,7 @@ export function MyClassPages() {
     // Bulk upload state
     const [isBulkLoading, setIsBulkLoading] = useState(false);
     const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
-    const [bulkPreview, setBulkPreview] = useState<{
-        fileName: string;
-        students: AddStudentInput[];
-        skippedCount: number;
-        totalRows: number;
-    } | null>(null);
+    const [validationResult, setValidationResult] = useState<XlsxValidationResult | null>(null);
 
     // Dialog message state
     const [dialog, setDialog] = useState({
@@ -388,6 +384,11 @@ export function MyClassPages() {
         }
     };
 
+    const handleOpenBulkModal = () => {
+        setValidationResult(null);
+        setIsBulkModalOpen(true);
+    };
+
     const handlePickXlsx = async () => {
         if (!selectedClass) return;
 
@@ -425,26 +426,8 @@ export function MyClassPages() {
             }
 
             setIsBulkLoading(true);
-            const parsed = await parseXlsxFile(asset.uri);
-
-            if (parsed.students.length === 0) {
-                setDialog({
-                    visible: true,
-                    type: "error",
-                    title: "No Valid Records",
-                    message:
-                        "No student records with first and last names were found in this file. Please ensure column headers include First Name and Last Name.",
-                });
-                return;
-            }
-
-            setBulkPreview({
-                fileName,
-                students: parsed.students,
-                skippedCount: parsed.skippedCount,
-                totalRows: parsed.totalRows,
-            });
-            setIsBulkModalOpen(true);
+            const validated = await parseAndValidateXlsx(asset.uri, fileName);
+            setValidationResult(validated);
         } catch (error) {
             console.error("Error picking document:", error);
             setDialog({
@@ -459,13 +442,24 @@ export function MyClassPages() {
     };
 
     const handleConfirmBulkImport = async () => {
-        if (!selectedClass || !bulkPreview || isBulkLoading) return;
+        if (
+            !selectedClass ||
+            !validationResult ||
+            isBulkLoading ||
+            validationResult.validStudents.length === 0
+        ) {
+            return;
+        }
 
         setIsBulkLoading(true);
         try {
-            const res = await addStudentsBulkToClass(username, selectedClass.id, bulkPreview.students);
+            const res = await addStudentsBulkToClass(
+                username,
+                selectedClass.id,
+                validationResult.validStudents
+            );
             setIsBulkModalOpen(false);
-            setBulkPreview(null);
+            setValidationResult(null);
             await loadClassStudents(selectedClass.id);
             await loadClasses();
 
@@ -573,24 +567,9 @@ export function MyClassPages() {
                 {!selectedClass ? (
                     <>
                         <View style={myClassPagesStyle.header}>
-                            <View style={myClassPagesStyle.headerTopRow}>
-                                <View style={myClassPagesStyle.headerTitleRow}>
-                                    <Ionicons name="school-outline" size={26} color="#4F46E5" />
-                                    <Text style={myClassPagesStyle.greeting}>My Classes</Text>
-                                </View>
-
-                                <View style={myClassPagesStyle.headerActions}>
-                                    <Pressable
-                                        onPress={handleOpenCreateClass}
-                                        style={({ pressed }) => [
-                                            myClassPagesStyle.addButton,
-                                            pressed && myClassPagesStyle.addButtonPressed,
-                                        ]}
-                                    >
-                                        <Ionicons name="add" size={18} color="#FFFFFF" />
-                                        <Text style={myClassPagesStyle.addButtonText}>Create Class</Text>
-                                    </Pressable>
-                                </View>
+                            <View style={myClassPagesStyle.headerTitleRow}>
+                                <Ionicons name="school-outline" size={26} color="#4F46E5" />
+                                <Text style={myClassPagesStyle.greeting}>My Classes</Text>
                             </View>
                             <Text style={myClassPagesStyle.subtitle}>
                                 Manage your active classes and student rosters
@@ -611,27 +590,43 @@ export function MyClassPages() {
                             </View>
                         </View>
 
-                        {/* Search Filter for Classes */}
-                        <View style={myClassPagesStyle.filterContainer}>
-                            <Ionicons name="search-outline" size={18} color="#94A3B8" />
-                            <TextInput
-                                style={myClassPagesStyle.filterInput}
-                                placeholder="Search classes by name, section, or subject..."
-                                placeholderTextColor="#94A3B8"
-                                value={classSearchQuery}
-                                onChangeText={setClassSearchQuery}
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                            />
-                            {classSearchQuery.length > 0 && (
-                                <Pressable
-                                    onPress={() => setClassSearchQuery("")}
-                                    style={myClassPagesStyle.filterClearButton}
-                                    hitSlop={8}
-                                >
-                                    <Ionicons name="close-circle" size={16} color="#94A3B8" />
-                                </Pressable>
-                            )}
+                        {/* Search Filter & Create Class Action Row */}
+                        <View style={myClassPagesStyle.searchActionRow}>
+                            <View style={myClassPagesStyle.searchFilterWrapper}>
+                                <Ionicons name="search-outline" size={17} color="#94A3B8" />
+                                <TextInput
+                                    style={myClassPagesStyle.searchFilterInput}
+                                    placeholder="Search classes..."
+                                    placeholderTextColor="#94A3B8"
+                                    value={classSearchQuery}
+                                    onChangeText={setClassSearchQuery}
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                />
+                                {classSearchQuery.length > 0 && (
+                                    <Pressable
+                                        onPress={() => setClassSearchQuery("")}
+                                        style={myClassPagesStyle.filterClearButton}
+                                        hitSlop={8}
+                                        accessibilityLabel="Clear search input"
+                                    >
+                                        <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                                    </Pressable>
+                                )}
+                            </View>
+
+                            <Pressable
+                                onPress={handleOpenCreateClass}
+                                style={({ pressed }) => [
+                                    myClassPagesStyle.createClassButton,
+                                    pressed && myClassPagesStyle.createClassButtonPressed,
+                                ]}
+                            >
+                                <Ionicons name="add" size={18} color="#FFFFFF" />
+                                <Text style={myClassPagesStyle.createClassButtonText} numberOfLines={1}>
+                                    Create Class
+                                </Text>
+                            </Pressable>
                         </View>
 
                         {/* Classes Cards Grid */}
@@ -920,7 +915,7 @@ export function MyClassPages() {
 
                                 <View style={{ flexDirection: "row", gap: 8 }}>
                                     <Pressable
-                                        onPress={handlePickXlsx}
+                                        onPress={handleOpenBulkModal}
                                         disabled={isBulkLoading}
                                         style={({ pressed }) => [
                                             myClassPagesStyle.bulkButton,
@@ -1018,8 +1013,8 @@ export function MyClassPages() {
                                                     sortAsc === true
                                                         ? "arrow-up"
                                                         : sortAsc === false
-                                                        ? "arrow-down"
-                                                        : "swap-vertical"
+                                                            ? "arrow-down"
+                                                            : "swap-vertical"
                                                 }
                                                 size={13}
                                                 color="#64748B"
@@ -1171,8 +1166,8 @@ export function MyClassPages() {
                                     isSubmittingClass
                                         ? "Saving..."
                                         : editingClass
-                                        ? "Save Changes"
-                                        : "Create Class"
+                                            ? "Save Changes"
+                                            : "Create Class"
                                 }
                                 onPress={isSubmittingClass ? undefined : handleSubmitClass}
                             />
@@ -1297,73 +1292,476 @@ export function MyClassPages() {
                 </KeyboardAvoidingView>
             </Modal>
 
-            {/* Bulk Upload Preview Modal */}
+            {/* Bulk Upload Modal (Format Info & Validation) */}
             <Modal
                 visible={isBulkModalOpen}
                 transparent
                 animationType="fade"
-                onRequestClose={() => setIsBulkModalOpen(false)}
+                onRequestClose={() => {
+                    if (!isBulkLoading) {
+                        setIsBulkModalOpen(false);
+                        setValidationResult(null);
+                    }
+                }}
             >
                 <View style={myClassPagesStyle.modalOverlay}>
                     <View style={myClassPagesStyle.modalContent}>
-                        <View style={myClassPagesStyle.modalHeader}>
-                            <Text style={myClassPagesStyle.modalTitle}>Confirm Bulk Import</Text>
-                            <Pressable onPress={() => setIsBulkModalOpen(false)} hitSlop={8}>
-                                <Ionicons name="close" size={22} color="#64748B" />
-                            </Pressable>
-                        </View>
-
-                        {bulkPreview && (
-                            <ScrollView showsVerticalScrollIndicator={false}>
-                                <View style={myClassPagesStyle.previewCard}>
-                                    <Text style={myClassPagesStyle.previewFileName}>
-                                        📄 {bulkPreview.fileName}
-                                    </Text>
-                                    <Text style={myClassPagesStyle.previewStats}>
-                                        ✓ {bulkPreview.students.length} student
-                                        {bulkPreview.students.length > 1 ? "s" : ""} will be added to {selectedClass?.name}
-                                    </Text>
-                                    {bulkPreview.skippedCount > 0 && (
-                                        <Text style={myClassPagesStyle.previewSkipped}>
-                                            ⚠ {bulkPreview.skippedCount} row
-                                            {bulkPreview.skippedCount > 1 ? "s" : ""} skipped (missing first or last name)
-                                        </Text>
-                                    )}
-
-                                    <Text style={myClassPagesStyle.previewListTitle}>
-                                        Preview (first {Math.min(5, bulkPreview.students.length)} students):
-                                    </Text>
-                                    {bulkPreview.students.slice(0, 5).map((s, idx) => (
-                                        <View key={idx} style={myClassPagesStyle.previewItem}>
-                                            <Ionicons name="person-outline" size={13} color="#64748B" />
-                                            <Text style={myClassPagesStyle.previewItemText}>
-                                                {formatStudentName(s)}
-                                            </Text>
-                                        </View>
-                                    ))}
-                                    {bulkPreview.students.length > 5 && (
-                                        <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 4, fontStyle: "italic" }}>
-                                            ...and {bulkPreview.students.length - 5} more
-                                        </Text>
-                                    )}
+                        {!validationResult ? (
+                            /* =========================================================================
+                               STATE 1: FORMAT GUIDELINES & FILE PICKER
+                               ========================================================================= */
+                            <>
+                                <View style={myClassPagesStyle.modalHeader}>
+                                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                                        <Ionicons name="document-text-outline" size={22} color="#4F46E5" />
+                                        <Text style={myClassPagesStyle.modalTitle}>Import Students</Text>
+                                    </View>
+                                    <Pressable
+                                        disabled={isBulkLoading}
+                                        onPress={() => setIsBulkModalOpen(false)}
+                                        hitSlop={8}
+                                    >
+                                        <Ionicons name="close" size={22} color="#64748B" />
+                                    </Pressable>
                                 </View>
 
-                                <Button
-                                    label={
-                                        isBulkLoading
-                                            ? "Importing..."
-                                            : `Import ${bulkPreview.students.length} Students`
-                                    }
-                                    onPress={isBulkLoading ? undefined : handleConfirmBulkImport}
-                                />
+                                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+                                    <Text style={myClassPagesStyle.formatGuideSubtitle}>
+                                        Upload an Excel or CSV file containing your student list. Please format your table with the acceptable column headers below:
+                                    </Text>
 
-                                <Pressable
-                                    onPress={() => setIsBulkModalOpen(false)}
-                                    style={myClassPagesStyle.cancelButton}
-                                >
-                                    <Text style={myClassPagesStyle.cancelButtonText}>Cancel</Text>
-                                </Pressable>
-                            </ScrollView>
+                                    {/* Acceptable Columns Specification */}
+                                    <View style={myClassPagesStyle.columnSpecCard}>
+                                        <Text style={myClassPagesStyle.columnSpecTitle}>Acceptable Column Headers</Text>
+
+                                        <View style={myClassPagesStyle.columnSpecRow}>
+                                            <View>
+                                                <Text style={myClassPagesStyle.columnSpecName}>First Name</Text>
+                                                <Text style={myClassPagesStyle.columnSpecExamples}>
+                                                    e.g. FirstName, First Name, fname
+                                                </Text>
+                                            </View>
+                                            <View style={myClassPagesStyle.columnRequiredBadge}>
+                                                <Text style={myClassPagesStyle.columnRequiredText}>Required</Text>
+                                            </View>
+                                        </View>
+
+                                        <View style={myClassPagesStyle.columnSpecRow}>
+                                            <View>
+                                                <Text style={myClassPagesStyle.columnSpecName}>Last Name</Text>
+                                                <Text style={myClassPagesStyle.columnSpecExamples}>
+                                                    e.g. LastName, Last Name, lname, surname
+                                                </Text>
+                                            </View>
+                                            <View style={myClassPagesStyle.columnRequiredBadge}>
+                                                <Text style={myClassPagesStyle.columnRequiredText}>Required</Text>
+                                            </View>
+                                        </View>
+
+                                        <View style={myClassPagesStyle.columnSpecRow}>
+                                            <View>
+                                                <Text style={myClassPagesStyle.columnSpecName}>Middle Name</Text>
+                                                <Text style={myClassPagesStyle.columnSpecExamples}>
+                                                    e.g. MiddleName, Middle Name, mi
+                                                </Text>
+                                            </View>
+                                            <View style={myClassPagesStyle.columnOptionalBadge}>
+                                                <Text style={myClassPagesStyle.columnOptionalText}>Optional</Text>
+                                            </View>
+                                        </View>
+
+                                        <View style={[myClassPagesStyle.columnSpecRow, { borderBottomWidth: 0 }]}>
+                                            <View>
+                                                <Text style={myClassPagesStyle.columnSpecName}>Suffix</Text>
+                                                <Text style={myClassPagesStyle.columnSpecExamples}>
+                                                    e.g. Suffix, Jr., Sr., III, IV
+                                                </Text>
+                                            </View>
+                                            <View style={myClassPagesStyle.columnOptionalBadge}>
+                                                <Text style={myClassPagesStyle.columnOptionalText}>Optional</Text>
+                                            </View>
+                                        </View>
+                                    </View>
+
+                                    {/* Mini Sample Preview Table */}
+                                    <Text style={myClassPagesStyle.columnSpecTitle}>Sample Table Format</Text>
+                                    <View style={myClassPagesStyle.sampleTableContainer}>
+                                        <View style={[myClassPagesStyle.sampleTableRow, myClassPagesStyle.sampleTableHeaderRow]}>
+                                            <View style={myClassPagesStyle.sampleTableCell}>
+                                                <Text style={myClassPagesStyle.sampleTableHeaderText}>First Name</Text>
+                                            </View>
+                                            <View style={myClassPagesStyle.sampleTableCell}>
+                                                <Text style={myClassPagesStyle.sampleTableHeaderText}>Middle Name</Text>
+                                            </View>
+                                            <View style={myClassPagesStyle.sampleTableCell}>
+                                                <Text style={myClassPagesStyle.sampleTableHeaderText}>Last Name</Text>
+                                            </View>
+                                            <View style={myClassPagesStyle.sampleTableCell}>
+                                                <Text style={myClassPagesStyle.sampleTableHeaderText}>Suffix</Text>
+                                            </View>
+                                        </View>
+                                        <View style={myClassPagesStyle.sampleTableRow}>
+                                            <View style={myClassPagesStyle.sampleTableCell}>
+                                                <Text style={myClassPagesStyle.sampleTableCellText}>Juan</Text>
+                                            </View>
+                                            <View style={myClassPagesStyle.sampleTableCell}>
+                                                <Text style={myClassPagesStyle.sampleTableCellText}>Santos</Text>
+                                            </View>
+                                            <View style={myClassPagesStyle.sampleTableCell}>
+                                                <Text style={myClassPagesStyle.sampleTableCellText}>Dela Cruz</Text>
+                                            </View>
+                                            <View style={myClassPagesStyle.sampleTableCell}>
+                                                <Text style={myClassPagesStyle.sampleTableCellText}>Jr.</Text>
+                                            </View>
+                                        </View>
+                                        <View style={[myClassPagesStyle.sampleTableRow, { borderBottomWidth: 0 }]}>
+                                            <View style={myClassPagesStyle.sampleTableCell}>
+                                                <Text style={myClassPagesStyle.sampleTableCellText}>Maria</Text>
+                                            </View>
+                                            <View style={myClassPagesStyle.sampleTableCell}>
+                                                <Text style={myClassPagesStyle.sampleTableCellText}>Clara</Text>
+                                            </View>
+                                            <View style={myClassPagesStyle.sampleTableCell}>
+                                                <Text style={myClassPagesStyle.sampleTableCellText}>Reyes</Text>
+                                            </View>
+                                            <View style={myClassPagesStyle.sampleTableCell}>
+                                                <Text style={myClassPagesStyle.sampleTableCellText}>-</Text>
+                                            </View>
+                                        </View>
+                                    </View>
+
+                                    <Text style={myClassPagesStyle.formatGuideNote}>
+                                        <Text style={myClassPagesStyle.formatGuideNoteBold}>Supported formats: </Text>
+                                        .xlsx, .xls, .csv files. Header names must be on the first row of your spreadsheet.
+                                    </Text>
+
+                                    <Pressable
+                                        disabled={isBulkLoading}
+                                        onPress={handlePickXlsx}
+                                        style={({ pressed }) => [
+                                            myClassPagesStyle.selectFileButton,
+                                            pressed && myClassPagesStyle.selectFileButtonPressed,
+                                        ]}
+                                    >
+                                        {isBulkLoading ? (
+                                            <ActivityIndicator size="small" color="#FFFFFF" />
+                                        ) : (
+                                            <Ionicons name="cloud-upload-outline" size={18} color="#FFFFFF" />
+                                        )}
+                                        <Text style={myClassPagesStyle.selectFileButtonText}>
+                                            {isBulkLoading ? "Checking & Validating..." : "Select Spreadsheet File"}
+                                        </Text>
+                                    </Pressable>
+
+                                    <Pressable
+                                        disabled={isBulkLoading}
+                                        onPress={() => setIsBulkModalOpen(false)}
+                                        style={myClassPagesStyle.cancelButton}
+                                    >
+                                        <Text style={myClassPagesStyle.cancelButtonText}>Cancel</Text>
+                                    </Pressable>
+                                </ScrollView>
+                            </>
+                        ) : (
+                            /* =========================================================================
+                               STATE 2: ROW & COLUMN VALIDATION FEEDBACK
+                               ========================================================================= */
+                            <>
+                                <View style={myClassPagesStyle.modalHeader}>
+                                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                                        <Ionicons
+                                            name={
+                                                validationResult.success && validationResult.invalidRows.length === 0
+                                                    ? "checkmark-circle"
+                                                    : validationResult.validStudents.length > 0
+                                                        ? "alert-circle"
+                                                        : "close-circle"
+                                            }
+                                            size={22}
+                                            color={
+                                                validationResult.success && validationResult.invalidRows.length === 0
+                                                    ? "#16A34A"
+                                                    : validationResult.validStudents.length > 0
+                                                        ? "#D97706"
+                                                        : "#DC2626"
+                                            }
+                                        />
+                                        <Text style={myClassPagesStyle.modalTitle}>File Validation</Text>
+                                    </View>
+                                    <Pressable
+                                        disabled={isBulkLoading}
+                                        onPress={() => {
+                                            setIsBulkModalOpen(false);
+                                            setValidationResult(null);
+                                        }}
+                                        hitSlop={8}
+                                    >
+                                        <Ionicons name="close" size={22} color="#64748B" />
+                                    </Pressable>
+                                </View>
+
+                                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+                                    {/* File Info */}
+                                    <View style={myClassPagesStyle.previewCard}>
+                                        <Text style={myClassPagesStyle.previewFileName}>
+                                            📄 {validationResult.fileName}
+                                        </Text>
+                                        <Text style={{ fontSize: 12, color: "#64748B" }}>
+                                            Sheet: {validationResult.sheetName || "Sheet1"} • Total Rows: {validationResult.totalRows}
+                                        </Text>
+                                    </View>
+
+                                    {/* Overall Status Banner */}
+                                    {validationResult.success && validationResult.invalidRows.length === 0 ? (
+                                        <View style={myClassPagesStyle.validationBannerSuccess}>
+                                            <Ionicons name="checkmark-circle" size={20} color="#16A34A" />
+                                            <Text style={[myClassPagesStyle.validationBannerText, { color: "#166534" }]}>
+                                                All columns and rows are valid! {validationResult.validStudents.length} student{validationResult.validStudents.length > 1 ? "s" : ""} ready to import.
+                                            </Text>
+                                        </View>
+                                    ) : validationResult.validStudents.length > 0 ? (
+                                        <View style={myClassPagesStyle.validationBannerWarning}>
+                                            <Ionicons name="warning-outline" size={20} color="#D97706" />
+                                            <Text style={[myClassPagesStyle.validationBannerText, { color: "#92400E" }]}>
+                                                {validationResult.validStudents.length} of {validationResult.totalRows} rows are valid. {validationResult.invalidRows.length} row{validationResult.invalidRows.length > 1 ? "s" : ""} will be skipped due to issues.
+                                            </Text>
+                                        </View>
+                                    ) : (
+                                        <View style={myClassPagesStyle.validationBannerError}>
+                                            <Ionicons name="close-circle" size={20} color="#DC2626" />
+                                            <Text style={[myClassPagesStyle.validationBannerText, { color: "#991B1B" }]}>
+                                                {validationResult.errorMessage || "The spreadsheet format is invalid. Please review column headers and row contents."}
+                                            </Text>
+                                        </View>
+                                    )}
+
+                                    {/* Column Headers Status */}
+                                    <Text style={myClassPagesStyle.validationSectionTitle}>Columns Status</Text>
+                                    <View style={myClassPagesStyle.columnSpecCard}>
+                                        {/* First Name */}
+                                        <View style={myClassPagesStyle.validationColumnRow}>
+                                            <Text style={myClassPagesStyle.validationColumnLabel}>First Name (Required)</Text>
+                                            <View
+                                                style={[
+                                                    myClassPagesStyle.validationStatusBadge,
+                                                    validationResult.columns.firstName.detected
+                                                        ? myClassPagesStyle.validationStatusBadgeValid
+                                                        : myClassPagesStyle.validationStatusBadgeInvalid,
+                                                ]}
+                                            >
+                                                <Ionicons
+                                                    name={validationResult.columns.firstName.detected ? "checkmark" : "close"}
+                                                    size={12}
+                                                    color={validationResult.columns.firstName.detected ? "#15803D" : "#B91C1C"}
+                                                />
+                                                <Text
+                                                    style={[
+                                                        myClassPagesStyle.validationStatusText,
+                                                        { color: validationResult.columns.firstName.detected ? "#15803D" : "#B91C1C" },
+                                                    ]}
+                                                >
+                                                    {validationResult.columns.firstName.detected
+                                                        ? `Found ("${validationResult.columns.firstName.matchedHeader}")`
+                                                        : "Missing Column"}
+                                                </Text>
+                                            </View>
+                                        </View>
+
+                                        {/* Last Name */}
+                                        <View style={myClassPagesStyle.validationColumnRow}>
+                                            <Text style={myClassPagesStyle.validationColumnLabel}>Last Name (Required)</Text>
+                                            <View
+                                                style={[
+                                                    myClassPagesStyle.validationStatusBadge,
+                                                    validationResult.columns.lastName.detected
+                                                        ? myClassPagesStyle.validationStatusBadgeValid
+                                                        : myClassPagesStyle.validationStatusBadgeInvalid,
+                                                ]}
+                                            >
+                                                <Ionicons
+                                                    name={validationResult.columns.lastName.detected ? "checkmark" : "close"}
+                                                    size={12}
+                                                    color={validationResult.columns.lastName.detected ? "#15803D" : "#B91C1C"}
+                                                />
+                                                <Text
+                                                    style={[
+                                                        myClassPagesStyle.validationStatusText,
+                                                        { color: validationResult.columns.lastName.detected ? "#15803D" : "#B91C1C" },
+                                                    ]}
+                                                >
+                                                    {validationResult.columns.lastName.detected
+                                                        ? `Found ("${validationResult.columns.lastName.matchedHeader}")`
+                                                        : "Missing Column"}
+                                                </Text>
+                                            </View>
+                                        </View>
+
+                                        {/* Middle Name */}
+                                        <View style={myClassPagesStyle.validationColumnRow}>
+                                            <Text style={myClassPagesStyle.validationColumnLabel}>Middle Name (Optional)</Text>
+                                            <View
+                                                style={[
+                                                    myClassPagesStyle.validationStatusBadge,
+                                                    validationResult.columns.middleName.detected
+                                                        ? myClassPagesStyle.validationStatusBadgeValid
+                                                        : myClassPagesStyle.validationStatusBadgeOptional,
+                                                ]}
+                                            >
+                                                <Ionicons
+                                                    name={validationResult.columns.middleName.detected ? "checkmark" : "remove"}
+                                                    size={12}
+                                                    color={validationResult.columns.middleName.detected ? "#15803D" : "#64748B"}
+                                                />
+                                                <Text
+                                                    style={[
+                                                        myClassPagesStyle.validationStatusText,
+                                                        { color: validationResult.columns.middleName.detected ? "#15803D" : "#64748B" },
+                                                    ]}
+                                                >
+                                                    {validationResult.columns.middleName.detected
+                                                        ? `Found ("${validationResult.columns.middleName.matchedHeader}")`
+                                                        : "Not Provided"}
+                                                </Text>
+                                            </View>
+                                        </View>
+
+                                        {/* Suffix */}
+                                        <View style={[myClassPagesStyle.validationColumnRow, { borderBottomWidth: 0 }]}>
+                                            <Text style={myClassPagesStyle.validationColumnLabel}>Suffix (Optional)</Text>
+                                            <View
+                                                style={[
+                                                    myClassPagesStyle.validationStatusBadge,
+                                                    validationResult.columns.suffix.detected
+                                                        ? myClassPagesStyle.validationStatusBadgeValid
+                                                        : myClassPagesStyle.validationStatusBadgeOptional,
+                                                ]}
+                                            >
+                                                <Ionicons
+                                                    name={validationResult.columns.suffix.detected ? "checkmark" : "remove"}
+                                                    size={12}
+                                                    color={validationResult.columns.suffix.detected ? "#15803D" : "#64748B"}
+                                                />
+                                                <Text
+                                                    style={[
+                                                        myClassPagesStyle.validationStatusText,
+                                                        { color: validationResult.columns.suffix.detected ? "#15803D" : "#64748B" },
+                                                    ]}
+                                                >
+                                                    {validationResult.columns.suffix.detected
+                                                        ? `Found ("${validationResult.columns.suffix.matchedHeader}")`
+                                                        : "Not Provided"}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    </View>
+
+                                    {/* Rows Issue List (if any) */}
+                                    {validationResult.invalidRows.length > 0 && (
+                                        <>
+                                            <Text style={myClassPagesStyle.validationSectionTitle}>
+                                                Row Issues ({validationResult.invalidRows.length} skipped)
+                                            </Text>
+                                            <View style={myClassPagesStyle.rowIssueBox}>
+                                                <ScrollView nestedScrollEnabled style={{ maxHeight: 110 }}>
+                                                    {validationResult.invalidRows.map((issue, idx) => (
+                                                        <View key={idx} style={myClassPagesStyle.rowIssueItem}>
+                                                            <Ionicons name="alert-circle" size={13} color="#E11D48" />
+                                                            <Text style={myClassPagesStyle.rowIssueText}>
+                                                                Row {issue.rowNumber}: {issue.reason}
+                                                            </Text>
+                                                        </View>
+                                                    ))}
+                                                </ScrollView>
+                                            </View>
+                                        </>
+                                    )}
+
+                                    {/* Preview of Valid Students (first 5) */}
+                                    {validationResult.validStudents.length > 0 && (
+                                        <View style={{ marginTop: 12 }}>
+                                            <Text style={myClassPagesStyle.previewListTitle}>
+                                                Preview (first {Math.min(5, validationResult.validStudents.length)} students):
+                                            </Text>
+                                            <View style={myClassPagesStyle.previewCard}>
+                                                {validationResult.validStudents.slice(0, 5).map((s, idx) => (
+                                                    <View key={idx} style={myClassPagesStyle.previewItem}>
+                                                        <Ionicons name="person-outline" size={13} color="#64748B" />
+                                                        <Text style={myClassPagesStyle.previewItemText}>
+                                                            {formatStudentName(s)}
+                                                        </Text>
+                                                    </View>
+                                                ))}
+                                                {validationResult.validStudents.length > 5 && (
+                                                    <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 4, fontStyle: "italic" }}>
+                                                        ...and {validationResult.validStudents.length - 5} more
+                                                    </Text>
+                                                )}
+                                            </View>
+                                        </View>
+                                    )}
+
+                                    {/* Actions */}
+                                    {validationResult.validStudents.length > 0 ? (
+                                        <>
+                                            <Button
+                                                label={
+                                                    isBulkLoading
+                                                        ? "Importing Students..."
+                                                        : `Import ${validationResult.validStudents.length} Students`
+                                                }
+                                                onPress={isBulkLoading ? undefined : handleConfirmBulkImport}
+                                            />
+
+                                            <Pressable
+                                                disabled={isBulkLoading}
+                                                onPress={handlePickXlsx}
+                                                style={({ pressed }) => [
+                                                    myClassPagesStyle.outlineButton,
+                                                    pressed && myClassPagesStyle.outlineButtonPressed,
+                                                ]}
+                                            >
+                                                <Text style={myClassPagesStyle.outlineButtonText}>Choose Different File</Text>
+                                            </Pressable>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Pressable
+                                                disabled={isBulkLoading}
+                                                onPress={handlePickXlsx}
+                                                style={({ pressed }) => [
+                                                    myClassPagesStyle.selectFileButton,
+                                                    pressed && myClassPagesStyle.selectFileButtonPressed,
+                                                ]}
+                                            >
+                                                <Ionicons name="refresh-outline" size={18} color="#FFFFFF" />
+                                                <Text style={myClassPagesStyle.selectFileButtonText}>Choose Another File</Text>
+                                            </Pressable>
+
+                                            <Pressable
+                                                disabled={isBulkLoading}
+                                                onPress={() => setValidationResult(null)}
+                                                style={({ pressed }) => [
+                                                    myClassPagesStyle.outlineButton,
+                                                    pressed && myClassPagesStyle.outlineButtonPressed,
+                                                ]}
+                                            >
+                                                <Text style={myClassPagesStyle.outlineButtonText}>View Format Guide</Text>
+                                            </Pressable>
+                                        </>
+                                    )}
+
+                                    <Pressable
+                                        disabled={isBulkLoading}
+                                        onPress={() => {
+                                            setIsBulkModalOpen(false);
+                                            setValidationResult(null);
+                                        }}
+                                        style={myClassPagesStyle.cancelButton}
+                                    >
+                                        <Text style={myClassPagesStyle.cancelButtonText}>Cancel</Text>
+                                    </Pressable>
+                                </ScrollView>
+                            </>
                         )}
                     </View>
                 </View>

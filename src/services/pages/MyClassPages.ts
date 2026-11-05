@@ -105,52 +105,278 @@ export function normalizeStudentRow(row: Record<string, unknown>): AddStudentInp
     };
 }
 
+export interface XlsxColumnValidation {
+    name: string;
+    detected: boolean;
+    matchedHeader?: string;
+    required: boolean;
+}
+
+export interface XlsxRowIssue {
+    rowNumber: number;
+    reason: string;
+}
+
+export interface XlsxValidationResult {
+    success: boolean;
+    fileName: string;
+    sheetName: string;
+    totalRows: number;
+    columns: {
+        firstName: XlsxColumnValidation;
+        lastName: XlsxColumnValidation;
+        middleName: XlsxColumnValidation;
+        suffix: XlsxColumnValidation;
+    };
+    detectedHeaders: string[];
+    validStudents: AddStudentInput[];
+    invalidRows: XlsxRowIssue[];
+    errorMessage?: string;
+}
+
 /**
- * Parses an XLSX file from its URI and returns normalized student records
+ * Parses and validates an XLSX / CSV spreadsheet file, checking all column headers and row data.
+ */
+export async function parseAndValidateXlsx(
+    fileUri: string,
+    fileName: string
+): Promise<XlsxValidationResult> {
+    try {
+        const base64Data = await FileSystem.readAsStringAsync(fileUri, {
+            encoding: FileSystem.EncodingType.Base64,
+        });
+
+        const workbook = XLSX.read(base64Data, { type: "base64" });
+        const firstSheetName = workbook.SheetNames[0];
+
+        if (!firstSheetName) {
+            return {
+                success: false,
+                fileName,
+                sheetName: "",
+                totalRows: 0,
+                columns: {
+                    firstName: { name: "First Name", detected: false, required: true },
+                    lastName: { name: "Last Name", detected: false, required: true },
+                    middleName: { name: "Middle Name", detected: false, required: false },
+                    suffix: { name: "Suffix", detected: false, required: false },
+                },
+                detectedHeaders: [],
+                validStudents: [],
+                invalidRows: [],
+                errorMessage: "The workbook contains no sheets or data.",
+            };
+        }
+
+        const worksheet = workbook.Sheets[firstSheetName];
+        const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
+            defval: "",
+        });
+
+        if (rawRows.length === 0) {
+            return {
+                success: false,
+                fileName,
+                sheetName: firstSheetName,
+                totalRows: 0,
+                columns: {
+                    firstName: { name: "First Name", detected: false, required: true },
+                    lastName: { name: "Last Name", detected: false, required: true },
+                    middleName: { name: "Middle Name", detected: false, required: false },
+                    suffix: { name: "Suffix", detected: false, required: false },
+                },
+                detectedHeaders: [],
+                validStudents: [],
+                invalidRows: [],
+                errorMessage: "The sheet is empty or contains no data rows.",
+            };
+        }
+
+        // Collect all detected headers from row keys
+        const headerSet = new Set<string>();
+        for (const r of rawRows) {
+            for (const k of Object.keys(r)) {
+                if (k.trim()) headerSet.add(k.trim());
+            }
+        }
+        const detectedHeaders = Array.from(headerSet);
+
+        // Check columns
+        let matchedFirstHeader: string | undefined;
+        let matchedLastHeader: string | undefined;
+        let matchedMiddleHeader: string | undefined;
+        let matchedSuffixHeader: string | undefined;
+
+        for (const header of detectedHeaders) {
+            const cleanKey = header.toLowerCase().replace(/[^a-z0-9]/g, "");
+            if (
+                cleanKey === "firstname" ||
+                cleanKey === "first" ||
+                cleanKey === "fname" ||
+                cleanKey === "studentfirstname" ||
+                cleanKey === "studentfname"
+            ) {
+                matchedFirstHeader = header;
+            } else if (
+                cleanKey === "lastname" ||
+                cleanKey === "last" ||
+                cleanKey === "lname" ||
+                cleanKey === "surname" ||
+                cleanKey === "studentlastname" ||
+                cleanKey === "studentlname"
+            ) {
+                matchedLastHeader = header;
+            } else if (
+                cleanKey === "middlename" ||
+                cleanKey === "middle" ||
+                cleanKey === "mname" ||
+                cleanKey === "mi" ||
+                cleanKey === "middleinitial" ||
+                cleanKey === "studentmiddlename"
+            ) {
+                matchedMiddleHeader = header;
+            } else if (
+                cleanKey === "suffix" ||
+                cleanKey === "studentsuffix" ||
+                cleanKey === "ext" ||
+                cleanKey === "extension" ||
+                cleanKey === "nameextension"
+            ) {
+                matchedSuffixHeader = header;
+            }
+        }
+
+        const columns = {
+            firstName: {
+                name: "First Name",
+                detected: !!matchedFirstHeader,
+                matchedHeader: matchedFirstHeader,
+                required: true,
+            },
+            lastName: {
+                name: "Last Name",
+                detected: !!matchedLastHeader,
+                matchedHeader: matchedLastHeader,
+                required: true,
+            },
+            middleName: {
+                name: "Middle Name",
+                detected: !!matchedMiddleHeader,
+                matchedHeader: matchedMiddleHeader,
+                required: false,
+            },
+            suffix: {
+                name: "Suffix",
+                detected: !!matchedSuffixHeader,
+                matchedHeader: matchedSuffixHeader,
+                required: false,
+            },
+        };
+
+        const hasRequiredColumns = columns.firstName.detected && columns.lastName.detected;
+
+        const validStudents: AddStudentInput[] = [];
+        const invalidRows: XlsxRowIssue[] = [];
+
+        rawRows.forEach((row, idx) => {
+            const rowNumber = idx + 2; // Row 1 is header
+            const hasAnyContent = Object.values(row).some(
+                (v) => v !== null && v !== undefined && String(v).trim() !== ""
+            );
+            if (!hasAnyContent) {
+                return;
+            }
+
+            if (!hasRequiredColumns) {
+                invalidRows.push({
+                    rowNumber,
+                    reason: "Missing required column headers in file",
+                });
+                return;
+            }
+
+            const student = normalizeStudentRow(row);
+            if (student) {
+                validStudents.push(student);
+            } else {
+                let fn = "";
+                let ln = "";
+                if (matchedFirstHeader && row[matchedFirstHeader] !== undefined) {
+                    fn = String(row[matchedFirstHeader]).trim();
+                }
+                if (matchedLastHeader && row[matchedLastHeader] !== undefined) {
+                    ln = String(row[matchedLastHeader]).trim();
+                }
+
+                if (!fn && !ln) {
+                    invalidRows.push({ rowNumber, reason: "Missing both first and last name" });
+                } else if (!fn) {
+                    invalidRows.push({ rowNumber, reason: "Missing first name" });
+                } else if (!ln) {
+                    invalidRows.push({ rowNumber, reason: "Missing last name" });
+                } else {
+                    invalidRows.push({ rowNumber, reason: "Invalid format in row fields" });
+                }
+            }
+        });
+
+        const success = hasRequiredColumns && validStudents.length > 0;
+        let errorMessage: string | undefined;
+
+        if (!hasRequiredColumns) {
+            const missing: string[] = [];
+            if (!columns.firstName.detected) missing.push("First Name");
+            if (!columns.lastName.detected) missing.push("Last Name");
+            errorMessage = `Missing required column(s): ${missing.join(", ")}.`;
+        } else if (validStudents.length === 0) {
+            errorMessage = "No valid student records found in this file.";
+        }
+
+        return {
+            success,
+            fileName,
+            sheetName: firstSheetName,
+            totalRows: rawRows.length,
+            columns,
+            detectedHeaders,
+            validStudents,
+            invalidRows,
+            errorMessage,
+        };
+    } catch (err: unknown) {
+        console.error("Error parsing and validating XLSX:", err);
+        return {
+            success: false,
+            fileName,
+            sheetName: "",
+            totalRows: 0,
+            columns: {
+                firstName: { name: "First Name", detected: false, required: true },
+                lastName: { name: "Last Name", detected: false, required: true },
+                middleName: { name: "Middle Name", detected: false, required: false },
+                suffix: { name: "Suffix", detected: false, required: false },
+            },
+            detectedHeaders: [],
+            validStudents: [],
+            invalidRows: [],
+            errorMessage: err instanceof Error ? err.message : "Failed to read or parse file.",
+        };
+    }
+}
+
+/**
+ * Legacy wrapper: Parses an XLSX file from its URI and returns normalized student records
  */
 export async function parseXlsxFile(fileUri: string): Promise<{
     students: AddStudentInput[];
     skippedCount: number;
     totalRows: number;
 }> {
-    const base64Data = await FileSystem.readAsStringAsync(fileUri, {
-        encoding: FileSystem.EncodingType.Base64,
-    });
-
-    const workbook = XLSX.read(base64Data, { type: "base64" });
-    const firstSheetName = workbook.SheetNames[0];
-
-    if (!firstSheetName) {
-        return { students: [], skippedCount: 0, totalRows: 0 };
-    }
-
-    const worksheet = workbook.Sheets[firstSheetName];
-    const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
-        defval: "",
-    });
-
-    const students: AddStudentInput[] = [];
-    let skippedCount = 0;
-
-    for (const row of rawRows) {
-        const student = normalizeStudentRow(row);
-        if (student) {
-            students.push(student);
-        } else {
-            // Check if row had any non-empty content before counting as skipped
-            const hasAnyContent = Object.values(row).some(
-                (v) => v !== null && v !== undefined && String(v).trim() !== ""
-            );
-            if (hasAnyContent) {
-                skippedCount++;
-            }
-        }
-    }
-
+    const res = await parseAndValidateXlsx(fileUri, "students.xlsx");
     return {
-        students,
-        skippedCount,
-        totalRows: rawRows.length,
+        students: res.validStudents,
+        skippedCount: res.invalidRows.length,
+        totalRows: res.totalRows,
     };
 }
 
