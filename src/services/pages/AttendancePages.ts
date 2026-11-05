@@ -231,23 +231,6 @@ export async function deleteAttendanceSession(
     }
 }
 
-export async function deleteAttendanceRecord(
-    sessionId: number,
-    studentId: number
-): Promise<boolean> {
-    try {
-        const db = await getDatabase();
-        await db.runAsync(
-            "DELETE FROM attendance_records WHERE sessionId = ? AND studentId = ?",
-            [sessionId, studentId]
-        );
-        return true;
-    } catch (error) {
-        console.error("Error deleting attendance record:", error);
-        return false;
-    }
-}
-
 export async function saveAllAttendanceRecords(
     records: { sessionId: number; studentId: number; status: "1" | "0" }[],
     deletedKeys?: { sessionId: number; studentId: number }[]
@@ -280,28 +263,6 @@ export async function saveAllAttendanceRecords(
         return true;
     } catch (error) {
         console.error("Error saving all attendance records:", error);
-        return false;
-    }
-}
-
-export async function updateAttendanceRecord(
-    sessionId: number,
-    studentId: number,
-    status: "1" | "0"
-): Promise<boolean> {
-    try {
-        const db = await getDatabase();
-
-        await db.runAsync(
-            `INSERT INTO attendance_records (sessionId, studentId, status)
-             VALUES (?, ?, ?)
-             ON CONFLICT(sessionId, studentId) DO UPDATE SET status = excluded.status`,
-            [sessionId, studentId, status]
-        );
-
-        return true;
-    } catch (error) {
-        console.error("Error updating attendance record:", error);
         return false;
     }
 }

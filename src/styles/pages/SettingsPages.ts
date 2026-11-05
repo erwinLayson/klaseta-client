@@ -583,43 +583,13 @@ export const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: "700",
         color: "#4F46E5",
-    },
-    completeYearButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        backgroundColor: "#FEF3C7",
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: "#FDE68A",
-    },
-    completeYearButtonPressed: {
+    },    completeYearButtonPressed: {
         backgroundColor: "#FDE68A",
-    },
-    completeYearButtonDisabled: {
-        opacity: 0.6,
-    },
-    completeYearButtonText: {
+    },    completeYearButtonText: {
         fontSize: 14,
         fontWeight: "700",
         color: "#B45309",
-    },
-    completeModalContent: {
-        backgroundColor: "#FFFFFF",
-        borderRadius: 24,
-        padding: 24,
-        width: "90%",
-        maxWidth: 420,
-        shadowColor: "#0F172A",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.15,
-        shadowRadius: 24,
-        elevation: 6,
-    },
-    completeModalIconBox: {
+    },    completeModalIconBox: {
         width: 56,
         height: 56,
         borderRadius: 28,
@@ -628,44 +598,18 @@ export const styles = StyleSheet.create({
         justifyContent: "center",
         alignSelf: "center",
         marginBottom: 16,
-    },
-    completeModalTitle: {
-        fontSize: 19,
-        fontWeight: "700",
-        color: "#0F172A",
-        textAlign: "center",
-        marginBottom: 8,
-    },
-    completeModalMessage: {
+    },    completeModalMessage: {
         fontSize: 14,
         color: "#64748B",
         textAlign: "center",
         lineHeight: 20,
         marginBottom: 18,
-    },
-    completeModalInputGroup: {
-        marginBottom: 20,
-    },
-    completeModalInputLabel: {
+    },    completeModalInputLabel: {
         fontSize: 13,
         fontWeight: "600",
         color: "#334155",
         marginBottom: 6,
-    },
-    completeConfirmButton: {
-        backgroundColor: "#D97706",
-        paddingVertical: 13,
-        borderRadius: 12,
-        alignItems: "center",
-        justifyContent: "center",
-        marginBottom: 8,
-        shadowColor: "#D97706",
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.2,
-        shadowRadius: 6,
-        elevation: 2,
-    },
-    completeConfirmButtonText: {
+    },    completeConfirmButtonText: {
         fontSize: 14,
         fontWeight: "700",
         color: "#FFFFFF",

@@ -1,5 +1,3 @@
-export type AttendanceStatus = "1" | "0" | "present" | "absent";
-
 export interface AttendanceSession {
     id: number;
     date: string;
@@ -16,12 +14,4 @@ export interface AttendanceRecord {
     sessionId: number;
     studentId: number;
     status: string;
-}
-
-export interface CreateSessionInput {
-    date: string;
-    title?: string;
-    classId?: number;
-    quarter?: string;
-    school_year_id?: number;
 }

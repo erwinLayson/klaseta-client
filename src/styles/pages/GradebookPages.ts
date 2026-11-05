@@ -44,13 +44,7 @@ export const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         gap: 8,
-    },
-    headerActionsRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-    },
-    greeting: {
+    },    greeting: {
         fontSize: 28,
         fontWeight: "700",
         color: "#0F172A",
@@ -83,32 +77,9 @@ export const styles = StyleSheet.create({
         color: "#FFFFFF",
         fontSize: 13,
         fontWeight: "700",
-    },
-    weightsButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        backgroundColor: "#FFFFFF",
-        borderWidth: 1,
-        borderColor: "#E2E8F0",
-        paddingHorizontal: 12,
-        paddingVertical: 9,
-        borderRadius: 12,
-        shadowColor: "#0F172A",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 4,
-        elevation: 1,
-    },
-    weightsButtonPressed: {
+    },    weightsButtonPressed: {
         backgroundColor: "#F8FAFC",
-    },
-    weightsButtonText: {
-        color: "#334155",
-        fontSize: 13,
-        fontWeight: "600",
-    },
-    statsRow: {
+    },    statsRow: {
         flexDirection: "row",
         gap: 10,
         marginBottom: 16,
@@ -920,13 +891,7 @@ export const styles = StyleSheet.create({
         color: "#FFFFFF",
         fontSize: 14,
         fontWeight: "700",
-    },
-    datePickerSubtitle: {
-        fontSize: 13,
-        color: "#64748B",
-        marginBottom: 12,
-    },
-    dateOptionItem: {
+    },    dateOptionItem: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
@@ -937,84 +902,20 @@ export const styles = StyleSheet.create({
         backgroundColor: "#F8FAFC",
         borderWidth: 1,
         borderColor: "#E2E8F0",
-    },
-    dateOptionItemSelected: {
-        backgroundColor: "#ECFDF5",
-        borderColor: "#6EE7B7",
-    },
-    dateOptionItemPressed: {
+    },    dateOptionItemPressed: {
         backgroundColor: "#E2E8F0",
-    },
-    dateOptionLeft: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 10,
-        flex: 1,
-    },
-    dateOptionIconBox: {
+    },    dateOptionIconBox: {
         width: 36,
         height: 36,
         borderRadius: 10,
         backgroundColor: "#F1F5F9",
         alignItems: "center",
         justifyContent: "center",
-    },
-    dateOptionTitle: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: "#1E293B",
-    },
-    dateOptionSub: {
+    },    dateOptionSub: {
         fontSize: 12,
         color: "#64748B",
         marginTop: 2,
-    },
-
-    // ---------------------------------------------------------------------------
-    // Class Selector & Picker Styles
-    // ---------------------------------------------------------------------------
-    classSelectorBar: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        backgroundColor: "#FFFFFF",
-        borderRadius: 16,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: "#E2E8F0",
-        shadowColor: "#0F172A",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
-        elevation: 2,
-    },
-    classSelectorLeft: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        flex: 1,
-    },
-    classSelectorDot: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-    },
-    classSelectorLabel: {
-        fontSize: 11,
-        color: "#64748B",
-        fontWeight: "600",
-        textTransform: "uppercase",
-        letterSpacing: 0.5,
-    },
-    classSelectorName: {
-        fontSize: 15,
-        fontWeight: "700",
-        color: "#0F172A",
-        marginTop: 1,
-    },
-    classPickerOption: {
+    },    classPickerOption: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
@@ -1025,12 +926,7 @@ export const styles = StyleSheet.create({
         backgroundColor: "#F8FAFC",
         borderWidth: 1,
         borderColor: "#E2E8F0",
-    },
-    classPickerOptionSelected: {
-        backgroundColor: "#EEF2FF",
-        borderColor: "#C7D2FE",
-    },
-    noClassesCard: {
+    },    noClassesCard: {
         backgroundColor: "#FFFFFF",
         borderRadius: 20,
         padding: 24,

@@ -211,37 +211,7 @@ export const styles = StyleSheet.create({
         padding: 0,
     },
 
-    // School Year Filter Tabs
-    filterRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-        marginBottom: 16,
-    },
-    yearPill: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        paddingVertical: 7,
-        paddingHorizontal: 14,
-        borderRadius: 20,
-        backgroundColor: "#FFFFFF",
-        borderWidth: 1,
-        borderColor: "#CBD5E1",
-    },
-    yearPillActive: {
-        backgroundColor: "#4F46E5",
-        borderColor: "#4F46E5",
-    },
-    yearPillText: {
-        fontSize: 12.5,
-        fontWeight: "600",
-        color: "#475569",
-    },
-    yearPillTextActive: {
-        color: "#FFFFFF",
-        fontWeight: "700",
-    },
+
     statusBadgeCompleted: {
         paddingHorizontal: 6,
         paddingVertical: 2,

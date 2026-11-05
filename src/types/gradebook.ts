@@ -23,13 +23,6 @@ export interface Assessment {
     createdAt?: string;
 }
 
-export interface AssessmentScore {
-    id: number;
-    assessmentId: number;
-    studentId: number;
-    score: number;
-}
-
 export interface CreateAssessmentInput {
     title: string;
     maxScore: number;
@@ -48,13 +41,6 @@ export interface UpdateAssessmentInput {
     weightId?: number | null;
     classId?: number;
     quarter?: string;
-}
-
-export interface CreateGradingWeightInput {
-    name: string;
-    weight: number;
-    classId?: number;
-    school_year_id?: number;
 }
 
 export interface GradebookSpreadsheetData {

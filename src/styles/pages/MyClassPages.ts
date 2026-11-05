@@ -44,13 +44,7 @@ export const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         gap: 8,
-    },
-    headerActions: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-    },
-    greeting: {
+    },    greeting: {
         fontSize: 28,
         fontWeight: "700",
         color: "#0F172A",
@@ -324,13 +318,7 @@ export const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: "600",
         color: "#0F172A",
-    },
-    tableCellSuffix: {
-        width: 60,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    suffixBadge: {
+    },    suffixBadge: {
         backgroundColor: "#EEF2FF",
         paddingHorizontal: 8,
         paddingVertical: 3,
@@ -340,24 +328,13 @@ export const styles = StyleSheet.create({
         fontSize: 11,
         fontWeight: "700",
         color: "#4F46E5",
-    },
-    noSuffixText: {
-        fontSize: 14,
-        color: "#CBD5E1",
-    },
-    tableCellId: {
+    },    tableCellId: {
         width: 50,
         fontSize: 12,
         color: "#64748B",
         textAlign: "right",
         fontWeight: "500",
-    },
-    tableEmptyMessage: {
-        paddingVertical: 32,
-        paddingHorizontal: 20,
-        alignItems: "center",
-    },
-    tableEmptyText: {
+    },    tableEmptyText: {
         fontSize: 14,
         color: "#64748B",
         marginTop: 8,
@@ -402,13 +379,7 @@ export const styles = StyleSheet.create({
         textAlign: "center",
         lineHeight: 19,
         marginBottom: 16,
-    },
-    emptyActionsRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 10,
-    },
-    modalOverlay: {
+    },    modalOverlay: {
         flex: 1,
         backgroundColor: "rgba(15, 23, 42, 0.5)",
         justifyContent: "center",
@@ -468,14 +439,7 @@ export const styles = StyleSheet.create({
         fontWeight: "700",
         color: "#0F172A",
         marginBottom: 6,
-    },
-    previewStats: {
-        fontSize: 13,
-        color: "#16A34A",
-        fontWeight: "600",
-        marginBottom: 2,
-    },
-    previewSkipped: {
+    },    previewSkipped: {
         fontSize: 12,
         color: "#D97706",
         marginTop: 2,
@@ -996,14 +960,7 @@ export const styles = StyleSheet.create({
     colorChipSelected: {
         borderWidth: 2,
         borderColor: "#0F172A",
-    },
-    dangerBtn: {
-        backgroundColor: "#FEE2E2",
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 8,
-    },
-    dangerBtnText: {
+    },    dangerBtnText: {
         color: "#DC2626",
         fontSize: 12,
         fontWeight: "700",
