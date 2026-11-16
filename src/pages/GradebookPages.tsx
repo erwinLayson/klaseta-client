@@ -1235,12 +1235,16 @@ export function GradebookPages() {
                                     {/* Header Cell */}
                                     <View style={gradebookPagesStyle.studentHeaderCell}>
                                         <View style={gradebookPagesStyle.studentHeaderTopRow}>
-                                            <Text style={gradebookPagesStyle.studentHeaderCellText}>
-                                                Student Name
-                                            </Text>
-                                            <Text style={gradebookPagesStyle.gradeHeaderColText}>
-                                                Grade
-                                            </Text>
+                                            <View style={gradebookPagesStyle.studentHeaderNameCol}>
+                                                <Text style={gradebookPagesStyle.studentHeaderCellText}>
+                                                    Student Name
+                                                </Text>
+                                            </View>
+                                            <View style={gradebookPagesStyle.studentHeaderGradeCol}>
+                                                <Text style={gradebookPagesStyle.gradeHeaderColText}>
+                                                    Grade
+                                                </Text>
+                                            </View>
                                         </View>
                                         <Text style={gradebookPagesStyle.studentHeaderCellSub}>
                                             {filteredStudents.length} Students • Avg: {stats.avgGrade}
@@ -1262,67 +1266,71 @@ export function GradebookPages() {
                                                 key={student.id}
                                                 style={[
                                                     gradebookPagesStyle.studentRowContainer,
+                                                    isExpanded ? gradebookPagesStyle.rowExpanded : gradebookPagesStyle.rowCollapsed,
                                                     idx % 2 === 0
                                                         ? gradebookPagesStyle.rowEven
                                                         : gradebookPagesStyle.rowOdd,
-                                                    isExpanded && gradebookPagesStyle.rowExpanded,
                                                 ]}
                                             >
-                                                {/* Main Row (height 52) */}
+                                                {/* Main Row (height 53) */}
                                                 <Pressable
                                                     onPress={() => toggleStudentExpanded(student.id)}
                                                     style={gradebookPagesStyle.studentRowMain}
                                                 >
-                                                    <Ionicons
-                                                        name={isExpanded ? "chevron-down" : "chevron-forward"}
-                                                        size={14}
-                                                        color="#64748B"
-                                                        style={{ marginRight: 2 }}
-                                                    />
+                                                    <View style={gradebookPagesStyle.studentRowNameSection}>
+                                                        <Ionicons
+                                                            name={isExpanded ? "chevron-down" : "chevron-forward"}
+                                                            size={14}
+                                                            color="#64748B"
+                                                            style={{ marginRight: 4 }}
+                                                        />
 
-                                                    <Text
-                                                        style={gradebookPagesStyle.studentRowText}
-                                                        numberOfLines={1}
-                                                    >
-                                                        {student.firstname} {student.lastname}
-                                                    </Text>
-
-                                                    <Pressable
-                                                        onPress={(e) => {
-                                                            e.stopPropagation();
-                                                            setSelectedBreakdownStudent(student);
-                                                        }}
-                                                        hitSlop={4}
-                                                        style={[
-                                                            gradebookPagesStyle.studentGradePill,
-                                                            isHigh
-                                                                ? gradebookPagesStyle.gradeBadgeHigh
-                                                                : isMid
-                                                                    ? gradebookPagesStyle.gradeBadgeMid
-                                                                    : isPassing
-                                                                        ? gradebookPagesStyle.gradeBadgePassing
-                                                                        : isFailed
-                                                                            ? gradebookPagesStyle.gradeBadgeFailed
-                                                                            : gradebookPagesStyle.gradeBadgeEmpty,
-                                                        ]}
-                                                    >
                                                         <Text
+                                                            style={gradebookPagesStyle.studentRowText}
+                                                            numberOfLines={1}
+                                                        >
+                                                            {student.firstname} {student.lastname}
+                                                        </Text>
+                                                    </View>
+
+                                                    <View style={gradebookPagesStyle.studentRowGradeSection}>
+                                                        <Pressable
+                                                            onPress={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedBreakdownStudent(student);
+                                                            }}
+                                                            hitSlop={4}
                                                             style={[
-                                                                gradebookPagesStyle.studentGradePillText,
+                                                                gradebookPagesStyle.studentGradePill,
                                                                 isHigh
-                                                                    ? gradebookPagesStyle.gradeTextHigh
+                                                                    ? gradebookPagesStyle.gradeBadgeHigh
                                                                     : isMid
-                                                                        ? gradebookPagesStyle.gradeTextMid
+                                                                        ? gradebookPagesStyle.gradeBadgeMid
                                                                         : isPassing
-                                                                            ? gradebookPagesStyle.gradeTextPassing
+                                                                            ? gradebookPagesStyle.gradeBadgePassing
                                                                             : isFailed
-                                                                                ? gradebookPagesStyle.gradeTextFailed
-                                                                                : gradebookPagesStyle.gradeTextEmpty,
+                                                                                ? gradebookPagesStyle.gradeBadgeFailed
+                                                                                : gradebookPagesStyle.gradeBadgeEmpty,
                                                             ]}
                                                         >
-                                                            {gradeInfo?.displayGrade || "—"}
-                                                        </Text>
-                                                    </Pressable>
+                                                            <Text
+                                                                style={[
+                                                                    gradebookPagesStyle.studentGradePillText,
+                                                                    isHigh
+                                                                        ? gradebookPagesStyle.gradeTextHigh
+                                                                        : isMid
+                                                                            ? gradebookPagesStyle.gradeTextMid
+                                                                            : isPassing
+                                                                                ? gradebookPagesStyle.gradeTextPassing
+                                                                                : isFailed
+                                                                                    ? gradebookPagesStyle.gradeTextFailed
+                                                                                    : gradebookPagesStyle.gradeTextEmpty,
+                                                                ]}
+                                                            >
+                                                                {gradeInfo?.displayGrade || "—"}
+                                                            </Text>
+                                                        </Pressable>
+                                                    </View>
                                                 </Pressable>
 
                                                 {/* Expanded Details Drawer (height 56) */}
@@ -1375,7 +1383,7 @@ export function GradebookPages() {
                                 >
                                     <View>
                                         {/* Assessment Header Row */}
-                                        <View style={{ flexDirection: "row" }}>
+                                        <View style={gradebookPagesStyle.assessmentHeaderRow}>
                                             {filteredAssessments.map((assessment) => {
                                                 const isHovered = hoveredAssessmentId === assessment.id;
 
@@ -1435,7 +1443,7 @@ export function GradebookPages() {
 
                                                             {assessment.weightName ? (
                                                                 <View style={gradebookPagesStyle.weightBadge}>
-                                                                    <Text style={gradebookPagesStyle.weightBadgeText}>
+                                                                    <Text style={gradebookPagesStyle.weightBadgeText} numberOfLines={1}>
                                                                         {assessment.weightName}
                                                                     </Text>
                                                                 </View>
@@ -1465,11 +1473,11 @@ export function GradebookPages() {
                                                 <View
                                                     key={student.id}
                                                     style={[
-                                                        { flexDirection: "row" },
+                                                        gradebookPagesStyle.assessmentRowWrapper,
+                                                        isExpanded ? gradebookPagesStyle.rowExpanded : gradebookPagesStyle.rowCollapsed,
                                                         rowIdx % 2 === 0
                                                             ? gradebookPagesStyle.rowEven
                                                             : gradebookPagesStyle.rowOdd,
-                                                        isExpanded && gradebookPagesStyle.rowExpanded,
                                                     ]}
                                                 >
                                                     {filteredAssessments.map((assessment) => {

@@ -6,6 +6,7 @@ import {
     Text,
     View,
     Animated,
+    Easing,
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { styles } from "../../styles/components/ui/DialogMessage";
@@ -35,8 +36,11 @@ export function DialogMessage({
 }: DialogMessageProps) {
     const isSuccess = type === "success";
 
-    const [fadeAnim] = useState(() => new Animated.Value(0));
-    const [scaleAnim] = useState(() => new Animated.Value(0.92));
+    const [backdropAnim] = useState(() => new Animated.Value(0));
+    const [cardFadeAnim] = useState(() => new Animated.Value(0));
+    const [cardScaleAnim] = useState(() => new Animated.Value(0.92));
+    const [cardTranslateY] = useState(() => new Animated.Value(10));
+    const [iconScaleAnim] = useState(() => new Animated.Value(0.6));
     const isDismissingRef = useRef(false);
 
     const handleDismiss = useCallback(() => {
@@ -44,41 +48,80 @@ export function DialogMessage({
         isDismissingRef.current = true;
 
         Animated.parallel([
-            Animated.timing(fadeAnim, {
+            Animated.timing(backdropAnim, {
                 toValue: 0,
-                duration: 300,
+                duration: 190,
+                easing: Easing.in(Easing.quad),
                 useNativeDriver: true,
             }),
-            Animated.timing(scaleAnim, {
-                toValue: 0.95,
-                duration: 300,
+            Animated.timing(cardFadeAnim, {
+                toValue: 0,
+                duration: 190,
+                easing: Easing.in(Easing.cubic),
+                useNativeDriver: true,
+            }),
+            Animated.timing(cardScaleAnim, {
+                toValue: 0.94,
+                duration: 190,
+                easing: Easing.in(Easing.cubic),
+                useNativeDriver: true,
+            }),
+            Animated.timing(cardTranslateY, {
+                toValue: 6,
+                duration: 190,
+                easing: Easing.in(Easing.cubic),
                 useNativeDriver: true,
             }),
         ]).start(() => {
             onClose();
         });
-    }, [fadeAnim, scaleAnim, onClose]);
+    }, [backdropAnim, cardFadeAnim, cardScaleAnim, cardTranslateY, onClose]);
 
     useEffect(() => {
         let timer: ReturnType<typeof setTimeout> | null = null;
 
         if (visible) {
             isDismissingRef.current = false;
-            fadeAnim.setValue(0);
-            scaleAnim.setValue(0.92);
+            backdropAnim.setValue(0);
+            cardFadeAnim.setValue(0);
+            cardScaleAnim.setValue(0.92);
+            cardTranslateY.setValue(10);
+            iconScaleAnim.setValue(0.6);
 
             Animated.parallel([
-                Animated.timing(fadeAnim, {
+                Animated.timing(backdropAnim, {
                     toValue: 1,
                     duration: 220,
+                    easing: Easing.out(Easing.quad),
                     useNativeDriver: true,
                 }),
-                Animated.spring(scaleAnim, {
+                Animated.timing(cardFadeAnim, {
+                    toValue: 1,
+                    duration: 200,
+                    easing: Easing.out(Easing.quad),
+                    useNativeDriver: true,
+                }),
+                Animated.spring(cardScaleAnim, {
                     toValue: 1,
                     friction: 8,
-                    tension: 50,
+                    tension: 65,
                     useNativeDriver: true,
                 }),
+                Animated.spring(cardTranslateY, {
+                    toValue: 0,
+                    friction: 8,
+                    tension: 65,
+                    useNativeDriver: true,
+                }),
+                Animated.sequence([
+                    Animated.delay(40),
+                    Animated.spring(iconScaleAnim, {
+                        toValue: 1,
+                        friction: 6,
+                        tension: 70,
+                        useNativeDriver: true,
+                    }),
+                ]),
             ]).start();
 
             // Auto-fade success dialog after autoHideDuration
@@ -92,7 +135,17 @@ export function DialogMessage({
         return () => {
             if (timer) clearTimeout(timer);
         };
-    }, [visible, isSuccess, autoHideDuration, fadeAnim, scaleAnim, handleDismiss]);
+    }, [
+        visible,
+        isSuccess,
+        autoHideDuration,
+        backdropAnim,
+        cardFadeAnim,
+        cardScaleAnim,
+        cardTranslateY,
+        iconScaleAnim,
+        handleDismiss,
+    ]);
 
     if (!visible) return null;
 
@@ -102,26 +155,45 @@ export function DialogMessage({
             transparent
             animationType="none"
             onRequestClose={handleDismiss}
+            statusBarTranslucent
         >
-            <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+            <View style={styles.overlayWrapper}>
                 {/* Backdrop pressable to dismiss immediately if tapped */}
-                <Pressable
-                    style={StyleSheet.absoluteFill}
-                    onPress={handleDismiss}
-                />
-
                 <Animated.View
+                    style={[
+                        styles.backdrop,
+                        { opacity: backdropAnim },
+                    ]}
+                >
+                    <Pressable
+                        style={StyleSheet.absoluteFill}
+                        onPress={handleDismiss}
+                        accessibilityRole="button"
+                        accessibilityLabel="Dismiss dialog"
+                    />
+                </Animated.View>
+
+                {/* Dialog Content */}
+                <Animated.View
+                    needsOffscreenAlphaCompositing
                     style={[
                         styles.container,
                         {
-                            transform: [{ scale: scaleAnim }],
+                            opacity: cardFadeAnim,
+                            transform: [
+                                { scale: cardScaleAnim },
+                                { translateY: cardTranslateY },
+                            ],
                         },
                     ]}
                 >
-                    <View
+                    <Animated.View
                         style={[
                             styles.iconCircle,
                             isSuccess ? styles.iconSuccess : styles.iconError,
+                            {
+                                transform: [{ scale: iconScaleAnim }],
+                            },
                         ]}
                     >
                         <Ionicons
@@ -129,7 +201,7 @@ export function DialogMessage({
                             size={30}
                             color={isSuccess ? "#16A34A" : "#DC2626"}
                         />
-                    </View>
+                    </Animated.View>
 
                     <Text style={styles.title}>{title}</Text>
                     <Text
@@ -155,7 +227,7 @@ export function DialogMessage({
                         </Pressable>
                     )}
                 </Animated.View>
-            </Animated.View>
+            </View>
         </Modal>
     );
 }

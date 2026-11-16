@@ -298,25 +298,33 @@ export const styles = StyleSheet.create({
         flexDirection: "row",
     },
     studentFixedColumn: {
-        width: 215,
+        width: 220,
         borderRightWidth: 1,
         borderRightColor: "#E2E8F0",
         backgroundColor: "#FFFFFF",
         zIndex: 2,
     },
     studentHeaderCell: {
-        height: 90,
+        height: 92,
         justifyContent: "space-between",
         paddingHorizontal: 12,
-        paddingVertical: 10,
+        paddingVertical: 8,
         backgroundColor: "#F8FAFC",
         borderBottomWidth: 1,
         borderBottomColor: "#E2E8F0",
     },
     studentHeaderTopRow: {
         flexDirection: "row",
-        justifyContent: "space-between",
         alignItems: "center",
+        justifyContent: "space-between",
+    },
+    studentHeaderNameCol: {
+        flex: 1,
+    },
+    studentHeaderGradeCol: {
+        width: 66,
+        alignItems: "center",
+        justifyContent: "center",
     },
     studentHeaderCellText: {
         fontSize: 11,
@@ -350,23 +358,38 @@ export const styles = StyleSheet.create({
     studentRowContainer: {
         borderBottomWidth: 1,
         borderBottomColor: "#F1F5F9",
+        overflow: "hidden",
+    },
+    rowCollapsed: {
+        height: 54,
     },
     rowExpanded: {
+        height: 110,
         backgroundColor: "#F8FAFF",
     },
     studentRowMain: {
-        height: 52,
+        height: 53,
         flexDirection: "row",
         alignItems: "center",
-        justifyContent: "space-between",
         paddingHorizontal: 12,
-        gap: 6,
+    },
+    studentRowNameSection: {
+        flex: 1,
+        flexDirection: "row",
+        alignItems: "center",
+        marginRight: 6,
+    },
+    studentRowGradeSection: {
+        width: 66,
+        alignItems: "center",
+        justifyContent: "center",
     },
     studentRowExpandedDrawer: {
         height: 56,
         paddingHorizontal: 12,
-        paddingBottom: 8,
+        paddingVertical: 4,
         justifyContent: "space-between",
+        overflow: "hidden",
     },
     expandedMetaRow: {
         flexDirection: "row",
@@ -416,18 +439,21 @@ export const styles = StyleSheet.create({
         fontStyle: "italic",
     },
     scoreCellMain: {
-        height: 52,
+        height: 53,
         alignItems: "center",
         justifyContent: "center",
+        width: "100%",
     },
     scoreCellDrawer: {
         height: 56,
         alignItems: "center",
         justifyContent: "center",
         paddingBottom: 4,
+        width: "100%",
+        overflow: "hidden",
     },
     scoreCellExpandedHeight: {
-        height: 108,
+        height: 110,
     },
     cellPercentBadge: {
         paddingHorizontal: 6,
@@ -478,13 +504,13 @@ export const styles = StyleSheet.create({
         flex: 1,
     },
     studentGradePill: {
-        paddingHorizontal: 7,
+        paddingHorizontal: 6,
         paddingVertical: 3,
         borderRadius: 8,
         borderWidth: 1,
         alignItems: "center",
         justifyContent: "center",
-        minWidth: 48,
+        width: 58,
     },
     studentGradePillText: {
         fontSize: 11,
@@ -601,9 +627,13 @@ export const styles = StyleSheet.create({
         backgroundColor: "#4F46E5",
         borderRadius: 3,
     },
+    assessmentHeaderRow: {
+        flexDirection: "row",
+        height: 92,
+    },
     assessmentHeaderCell: {
-        width: 135,
-        height: 90,
+        width: 140,
+        height: 92,
         backgroundColor: "#F8FAFC",
         borderBottomWidth: 1,
         borderBottomColor: "#E2E8F0",
@@ -638,15 +668,15 @@ export const styles = StyleSheet.create({
     assessmentMetaRow: {
         flexDirection: "row",
         alignItems: "center",
-        flexWrap: "wrap",
-        gap: 4,
+        gap: 3,
         marginTop: 2,
     },
     weightBadge: {
         backgroundColor: "#EEF2FF",
-        paddingHorizontal: 6,
+        paddingHorizontal: 5,
         paddingVertical: 2,
         borderRadius: 6,
+        maxWidth: 60,
     },
     weightBadgeText: {
         fontSize: 9,
@@ -655,7 +685,7 @@ export const styles = StyleSheet.create({
     },
     maxScoreBadge: {
         backgroundColor: "#ECFDF5",
-        paddingHorizontal: 6,
+        paddingHorizontal: 5,
         paddingVertical: 2,
         borderRadius: 6,
     },
@@ -668,16 +698,19 @@ export const styles = StyleSheet.create({
         fontSize: 10,
         color: "#64748B",
     },
-    scoreCell: {
-        width: 135,
-        height: 52,
-        alignItems: "center",
-        justifyContent: "center",
+    assessmentRowWrapper: {
+        flexDirection: "row",
         borderBottomWidth: 1,
         borderBottomColor: "#F1F5F9",
+        overflow: "hidden",
+    },
+    scoreCell: {
+        width: 140,
+        height: 54,
+        alignItems: "center",
+        justifyContent: "center",
         borderRightWidth: 1,
-        borderRightColor: "#F8FAFC",
-        paddingHorizontal: 8,
+        borderRightColor: "#F1F5F9",
     },
     scoreInputWrapper: {
         flexDirection: "row",

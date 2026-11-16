@@ -1104,7 +1104,7 @@ export function AttendancePages() {
                                         >
                                             <View>
                                                 {/* Date Columns Header Row */}
-                                                <View style={{ flexDirection: "row" }}>
+                                                <View style={attendancePagesStyle.dateHeaderRow}>
                                                     {filteredSessions.map((session) => (
                                                         <View
                                                             key={session.id}
@@ -1159,7 +1159,7 @@ export function AttendancePages() {
                                                     <View
                                                         key={student.id}
                                                         style={[
-                                                            { flexDirection: "row" },
+                                                            attendancePagesStyle.dateRowWrapper,
                                                             rowIdx % 2 === 0
                                                                 ? attendancePagesStyle.rowEven
                                                                 : attendancePagesStyle.rowOdd,

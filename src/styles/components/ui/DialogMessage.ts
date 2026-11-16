@@ -1,12 +1,26 @@
-import { StyleSheet } from "react-native";
+import { StyleSheet, Platform } from "react-native";
 
 export const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: "rgba(15, 23, 42, 0.5)",
+        backgroundColor: "rgba(15, 23, 42, 0.45)",
         justifyContent: "center",
         alignItems: "center",
         paddingHorizontal: 32,
+    },
+    overlayWrapper: {
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        paddingHorizontal: 32,
+    },
+    backdrop: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(15, 23, 42, 0.45)",
     },
     container: {
         width: "100%",
@@ -17,11 +31,29 @@ export const styles = StyleSheet.create({
         paddingTop: 30,
         paddingBottom: 28,
         alignItems: "center",
-        shadowColor: "#0F172A",
-        shadowOffset: { width: 0, height: 18 },
-        shadowOpacity: 0.12,
-        shadowRadius: 30,
-        elevation: 8,
+        ...Platform.select({
+            ios: {
+                shadowColor: "#0F172A",
+                shadowOffset: { width: 0, height: 10 },
+                shadowOpacity: 0.08,
+                shadowRadius: 20,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: "#F1F5F9",
+            },
+            android: {
+                elevation: 0,
+                borderWidth: 1,
+                borderColor: "#E2E8F0",
+            },
+            default: {
+                shadowColor: "#0F172A",
+                shadowOffset: { width: 0, height: 10 },
+                shadowOpacity: 0.08,
+                shadowRadius: 20,
+                borderWidth: 1,
+                borderColor: "#E2E8F0",
+            },
+        }),
     },
     iconCircle: {
         width: 58,
