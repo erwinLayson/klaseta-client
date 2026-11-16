@@ -378,6 +378,7 @@ export const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         marginRight: 6,
+        gap: 6,
     },
     studentRowGradeSection: {
         width: 66,
@@ -501,7 +502,20 @@ export const styles = StyleSheet.create({
         fontSize: 13,
         fontWeight: "600",
         color: "#0F172A",
-        flex: 1,
+        flexShrink: 1,
+    },
+    suffixBadge: {
+        backgroundColor: "#EEF2FF",
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: "#E0E7FF",
+    },
+    suffixBadgeText: {
+        fontSize: 10,
+        fontWeight: "700",
+        color: "#4F46E5",
     },
     studentGradePill: {
         paddingHorizontal: 6,

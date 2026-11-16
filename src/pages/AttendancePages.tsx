@@ -1076,24 +1076,40 @@ export function AttendancePages() {
                                             </View>
 
                                             {/* Student Rows */}
-                                            {filteredStudents.map((student, idx) => (
-                                                <View
-                                                    key={student.id}
-                                                    style={[
-                                                        attendancePagesStyle.studentRowCell,
-                                                        idx % 2 === 0
-                                                            ? attendancePagesStyle.rowEven
-                                                            : attendancePagesStyle.rowOdd,
-                                                    ]}
-                                                >
-                                                    <Text
-                                                        style={attendancePagesStyle.studentRowText}
-                                                        numberOfLines={1}
+                                            {filteredStudents.map((student, idx) => {
+                                                const hasSuffix = Boolean(
+                                                    student.suffix &&
+                                                    student.suffix.trim() !== "" &&
+                                                    student.suffix.trim().toLowerCase() !== "none"
+                                                );
+                                                return (
+                                                    <View
+                                                        key={student.id}
+                                                        style={[
+                                                            attendancePagesStyle.studentRowCell,
+                                                            idx % 2 === 0
+                                                                ? attendancePagesStyle.rowEven
+                                                                : attendancePagesStyle.rowOdd,
+                                                        ]}
                                                     >
-                                                        {student.firstname} {student.lastname}
-                                                    </Text>
-                                                </View>
-                                            ))}
+                                                        <View style={attendancePagesStyle.studentRowNameContainer}>
+                                                            <Text
+                                                                style={attendancePagesStyle.studentRowText}
+                                                                numberOfLines={1}
+                                                            >
+                                                                {student.firstname} {student.lastname}
+                                                            </Text>
+                                                            {hasSuffix && (
+                                                                <View style={attendancePagesStyle.suffixBadge}>
+                                                                    <Text style={attendancePagesStyle.suffixBadgeText}>
+                                                                        {student.suffix!.trim()}
+                                                                    </Text>
+                                                                </View>
+                                                            )}
+                                                        </View>
+                                                    </View>
+                                                );
+                                            })}
                                         </View>
 
                                         {/* Horizontally Scrollable Date Columns */}

@@ -1075,10 +1075,12 @@ export function MyClassPages() {
                                                     <Text style={myClassPagesStyle.studentFullName} numberOfLines={1}>
                                                         {fullName}
                                                     </Text>
-                                                    {student.suffix && student.suffix !== "None" ? (
+                                                    {student.suffix &&
+                                                    student.suffix.trim() !== "" &&
+                                                    student.suffix.trim().toLowerCase() !== "none" ? (
                                                         <View style={myClassPagesStyle.suffixBadge}>
                                                             <Text style={myClassPagesStyle.suffixBadgeText}>
-                                                                {student.suffix}
+                                                                {student.suffix.trim()}
                                                             </Text>
                                                         </View>
                                                     ) : null}

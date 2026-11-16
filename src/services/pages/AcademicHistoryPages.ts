@@ -433,7 +433,14 @@ export async function markSchoolYearAsCompleted(
                 }[] = [];
 
                 for (const s of students) {
-                    const fullName = `${s.firstname} ${s.lastname}`;
+                    const hasSuffix = Boolean(
+                        s.suffix &&
+                        s.suffix.trim() !== "" &&
+                        s.suffix.trim().toLowerCase() !== "none"
+                    );
+                    const fullName = hasSuffix
+                        ? `${s.firstname} ${s.lastname} ${s.suffix!.trim()}`
+                        : `${s.firstname} ${s.lastname}`;
 
                     // Student attendance
                     const studentAttRecords = attendanceRecords.filter((ar) => ar.studentId === s.id);

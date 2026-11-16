@@ -1291,6 +1291,15 @@ export function GradebookPages() {
                                                         >
                                                             {student.firstname} {student.lastname}
                                                         </Text>
+                                                        {student.suffix &&
+                                                        student.suffix.trim() !== "" &&
+                                                        student.suffix.trim().toLowerCase() !== "none" ? (
+                                                            <View style={gradebookPagesStyle.suffixBadge}>
+                                                                <Text style={gradebookPagesStyle.suffixBadgeText}>
+                                                                    {student.suffix.trim()}
+                                                                </Text>
+                                                            </View>
+                                                        ) : null}
                                                     </View>
 
                                                     <View style={gradebookPagesStyle.studentRowGradeSection}>
@@ -1993,9 +2002,20 @@ export function GradebookPages() {
                                     <View style={gradebookPagesStyle.breakdownCard}>
                                         <View style={gradebookPagesStyle.breakdownHeaderRow}>
                                             <View>
-                                                <Text style={gradebookPagesStyle.breakdownStudentName}>
-                                                    {selectedBreakdownStudent.firstname} {selectedBreakdownStudent.lastname}
-                                                </Text>
+                                                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                                                    <Text style={gradebookPagesStyle.breakdownStudentName}>
+                                                        {selectedBreakdownStudent.firstname} {selectedBreakdownStudent.lastname}
+                                                    </Text>
+                                                    {selectedBreakdownStudent.suffix &&
+                                                    selectedBreakdownStudent.suffix.trim() !== "" &&
+                                                    selectedBreakdownStudent.suffix.trim().toLowerCase() !== "none" ? (
+                                                        <View style={gradebookPagesStyle.suffixBadge}>
+                                                            <Text style={gradebookPagesStyle.suffixBadgeText}>
+                                                                {selectedBreakdownStudent.suffix.trim()}
+                                                            </Text>
+                                                        </View>
+                                                    ) : null}
+                                                </View>
                                                 <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
                                                     {grade?.totalScoredAssessments || 0} of {assessments.length} assessments scored
                                                 </Text>

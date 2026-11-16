@@ -312,12 +312,16 @@ export const styles = StyleSheet.create({
     },
     tableCellName: {
         flex: 1,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
         paddingHorizontal: 6,
     },
     studentFullName: {
         fontSize: 14,
         fontWeight: "600",
         color: "#0F172A",
+        flexShrink: 1,
     },    suffixBadge: {
         backgroundColor: "#EEF2FF",
         paddingHorizontal: 8,

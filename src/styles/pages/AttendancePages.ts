@@ -309,7 +309,7 @@ export const styles = StyleSheet.create({
         flexDirection: "row",
     },
     studentFixedColumn: {
-        width: 155,
+        width: 170,
         borderRightWidth: 1,
         borderRightColor: "#E2E8F0",
         backgroundColor: "#FFFFFF",
@@ -337,10 +337,29 @@ export const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: "#F1F5F9",
     },
+    studentRowNameContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+    },
     studentRowText: {
         fontSize: 13,
         fontWeight: "600",
         color: "#0F172A",
+        flexShrink: 1,
+    },
+    suffixBadge: {
+        backgroundColor: "#EEF2FF",
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: "#E0E7FF",
+    },
+    suffixBadgeText: {
+        fontSize: 10,
+        fontWeight: "700",
+        color: "#4F46E5",
     },
     dateHeaderRow: {
         flexDirection: "row",
